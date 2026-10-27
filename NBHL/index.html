@@ -1741,6 +1741,8 @@
 <link rel="apple-touch-icon" href="../assets/chel-leagues-icon.png">
 <link rel="stylesheet" href="../mobile-app.css?v=2">
 <script defer src="../app.js"></script>
+<link rel="stylesheet" href="../player-ranks.css?v=1">
+<script src="../player-ranks.js?v=1"></script>
 </head>
 <body>
 
@@ -2984,6 +2986,7 @@ function buildLeaguePlayerRows(rows, headers, isGoalie) {
 }
 
 function renderPlayers() {
+  resetRatingCaches();
   const search = document.getElementById("player-search").value.trim().toLowerCase();
   const posFil = document.getElementById("pos-filter").value;
   const teamFil = document.getElementById("team-filter").value;
@@ -3109,6 +3112,7 @@ function changeGoalieSeason() {
 }
 
 function renderGoalies() {
+  resetRatingCaches();
   const search = document.getElementById("goalie-search").value.toLowerCase();
   const showStarters = !!document.getElementById("goalie-starters-filter")?.checked;
   const data = activeGoalieSeason === "playoffs" ? playoffGoalieData : goalieData;
@@ -5848,10 +5852,12 @@ function calculatePlayerOverall(stats, role, playerName = "") {
   if (!stats) return null;
   return role === "goalie" ? calculateGoalieOverall(stats) : calculateSkaterOverall(stats, playerName);
 }
-function renderOverallBadge(stats, role, playerName = "") {
-  const overall = calculatePlayerOverall(stats, role, playerName);
-  if (!overall) return "";
-  return `<span class="ovr-badge" title="Overall rating based on this card's current stats view"><strong>${overall}</strong> OVR</span>`;
+function renderOverallBadge(stats, role, playerName = "", compact = false) {
+  if (!window.ChelRanks || !stats) return "";
+  return window.ChelRanks.render({
+    score: calculatePlayerOverall(stats, role, playerName),
+    gp: statGpValue(stats), goalie: role === "goalie", compact,
+  });
 }
 
 const POSITION_CHART_COLORS = {
@@ -6414,7 +6420,10 @@ document.addEventListener("visibilitychange", () => {
 // Make a player-name cell clickable
 function makeClickable(name, rowData, headers, isGoalie, season = "regular", extraClass = "") {
   const classes = ["player-name", "clickable", extraClass].filter(Boolean).join(" ");
-  return `<td class="${classes}" onclick='openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie}, ${JSON.stringify(season)})'>${name}</td>`;
+  const stats = statsFromRow(rowData, headers);
+  const badge = renderOverallBadge(stats, isGoalie ? "goalie" : "player", name, true);
+  const action = `openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie}, ${JSON.stringify(season)})`;
+  return `<td class="${escapeHtml(classes)}" onclick="${escapeHtml(action)}"><span class="cl-player-name">${badge}<span class="cl-player-name-text">${escapeHtml(name)}</span></span></td>`;
 }
 // ── INIT ──────────────────────────────────────────────────────────────────────
 // Lazy-load schedule/games when tabs are first clicked
