@@ -48,11 +48,13 @@
   #player-centre .pc-table td:nth-child(4)::before{content:'Response'}
   #player-centre .pc-table td:nth-child(5){grid-column:1/-1}
   #player-centre .pc-table td:nth-child(5)::before{content:'Note'}
+  #player-centre .pc-table td:last-child:empty{display:none}
 }
 @media(max-width:640px){
   .controls>*{max-width:100%}.search-box{min-width:0;flex:1 1 200px}
-  .controls :is(input,select){font-size:16px}
+  .controls :is(input,select){font-size:16px;min-height:44px}
   .controls select{max-width:100%}
+  #score-bar-prev,#score-bar-next,#score-bar-pause{min-width:44px;min-height:44px}
   .modal-card{max-width:calc(100vw - 20px);max-height:calc(100dvh - 32px);overflow:auto}
   @media(display-mode:standalone){.controls{top:calc(58px + env(safe-area-inset-top))}}
 }
