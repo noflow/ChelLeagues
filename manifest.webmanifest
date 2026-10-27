@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "Chel Leagues",
+  "short_name": "Chel Leagues",
+  "description": "Your hockey leagues, player profile, schedules, and team availability.",
+  "lang": "en",
+  "start_url": "./?source=homescreen",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070d18",
+  "theme_color": "#070d18",
+  "icons": [
+    {"src": "assets/chel-leagues-icon.png", "sizes": "1254x1254", "type": "image/png", "purpose": "any"}
+  ]
+}

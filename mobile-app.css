@@ -1,0 +1,58 @@
+/* Shared app controls retain the enclosing league's palette. */
+.cl-app-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px;max-width:1160px;margin:0 auto;padding:12px 24px;color:var(--gold,#40c6ff);font:600 14px system-ui,sans-serif}
+.cl-app-tools[hidden],.cl-app-tools [hidden]{display:none}
+.cl-app-tools a{color:inherit;margin-right:auto;min-height:44px;display:flex;align-items:center}
+.cl-app-tools button{background:var(--teal2,#153b65);color:#fff;border:1px solid var(--gold,#40c6ff);border-radius:8px;padding:11px 16px;min-height:44px;font:inherit;cursor:pointer}
+.cl-install-dialog{box-sizing:border-box;background:#101b2d;color:#edf5ff;border:1px solid #40c6ff;border-radius:16px;max-width:500px;width:calc(100% - 32px);max-height:calc(100dvh - 48px);margin:auto;padding:24px;font:16px system-ui,sans-serif;overflow:auto}
+.cl-install-dialog::backdrop{background:#000b}
+.cl-install-dialog img{display:block;border-radius:12px;margin-bottom:16px}
+.cl-install-dialog h2{font-size:25px;line-height:1.2;margin:0 0 12px;color:inherit}
+.cl-install-dialog h3{font-size:17px;margin:22px 0 8px;color:inherit}
+.cl-install-dialog p,.cl-install-dialog li{line-height:1.6}
+.cl-install-dialog ol{padding-left:24px;margin:8px 0}
+.cl-install-dialog .cl-install-note{font-size:13px;color:#b9cbe1;margin:20px 0 0}
+.cl-dialog-close{float:right;min-height:44px;padding:10px 12px;background:#153b65;border:1px solid #566980;color:#fff;border-radius:6px;font:inherit;cursor:pointer}
+.cl-app-tools :focus-visible,.cl-install-dialog :focus-visible{outline:3px solid #40c6ff;outline-offset:3px}
+/* Notched screens, including standalone home-screen launches. */
+@media(display-mode:standalone){body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body>header{top:env(safe-area-inset-top)}.controls{top:calc(64px + env(safe-area-inset-top))}}
+#player-centre .pc-columns>*{min-width:0}
+#player-centre :is(p,dd,.pc-fixture-body,.pc-actions,.pc-pill){overflow-wrap:anywhere}
+#player-centre .pc-table th:first-child,#player-centre .pc-table td:first-child{width:auto;max-width:none;min-width:140px}
+@media(max-width:700px){
+  .cl-app-tools{padding:10px 12px}
+  nav .player-centre-nav{display:block;min-height:44px;padding:12px;color:#fff;text-decoration:none;font-family:inherit;font-size:17px;font-weight:600}
+  .mobile-menu-toggle,.discord-nav-link{min-height:44px;min-width:44px}
+  #player-centre :is(button,select,summary){min-height:44px}
+  #player-centre :is(input,select,textarea){font-size:16px}
+  #player-centre .pc-identity{flex-wrap:wrap;gap:12px}
+  #player-centre .pc-card{padding:16px}
+  #player-centre .pc-response-buttons{padding-left:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:6px}
+  #player-centre button.pc-response{min-height:44px;font-size:12px;padding:10px 6px}
+  #player-centre .pc-fixture{flex-wrap:wrap}
+  #player-centre .pc-response-buttons{flex-basis:100%}
+  #player-centre .pc-panel[aria-label="My team schedule"] .pc-scroll{height:auto;max-height:none;min-height:0}
+  #player-centre .pc-week{max-width:100%;flex-wrap:wrap}
+  #player-centre .pc-week select{max-width:100%}
+  /* Manager table becomes labelled roster cards instead of a wide scroll area. */
+  #player-centre .pc-table{overflow:visible}
+  #player-centre .pc-table table{display:block;min-width:0;table-layout:auto}
+  #player-centre .pc-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  #player-centre .pc-table tbody{display:grid;gap:12px}
+  #player-centre .pc-table tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--pc-line);border-radius:8px;padding:10px;gap:10px}
+  #player-centre .pc-table td,#player-centre .pc-table td:first-child{display:block;border:0;min-width:0;max-width:none;width:auto;padding:0!important;overflow-wrap:anywhere}
+  #player-centre .pc-table td::before{display:block;font-size:12px;color:var(--pc-muted);font-weight:600;margin-bottom:4px}
+  #player-centre .pc-table td:nth-child(1){grid-column:1/-1;font-size:18px;font-weight:700}
+  #player-centre .pc-table td:nth-child(2)::before{content:'Position'}
+  #player-centre .pc-table td:nth-child(3)::before{content:'Roster'}
+  #player-centre .pc-table td:nth-child(4){grid-column:1/-1}
+  #player-centre .pc-table td:nth-child(4)::before{content:'Response'}
+  #player-centre .pc-table td:nth-child(5){grid-column:1/-1}
+  #player-centre .pc-table td:nth-child(5)::before{content:'Note'}
+}
+@media(max-width:640px){
+  .controls>*{max-width:100%}.search-box{min-width:0;flex:1 1 200px}
+  .controls :is(input,select){font-size:16px}
+  .controls select{max-width:100%}
+  .modal-card{max-width:calc(100vw - 20px);max-height:calc(100dvh - 32px);overflow:auto}
+  @media(display-mode:standalone){.controls{top:calc(58px + env(safe-area-inset-top))}}
+}
