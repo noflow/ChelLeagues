@@ -36,12 +36,14 @@ test('badge crops stay within the approved image and include accessible labels',
     const [,x,y,w,h]=html.match(/viewBox="([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)"/).map(Number);
     assert.ok(x>=0&&y>=0&&x+w<=width&&y+h<=height);
     assert.match(html,/https:\/\/chelleagues.com\/assets\/player-ranks-v1.png/);
+    assert.match(html,/clipPathUnits="userSpaceOnUse"/);
+    assert.match(html,/clip-path="url\(#cl-rank-crop-\d+\)"/);
   }
 });
 test('each league connects cards and clickable player cells to shared badges',()=>{
   for (const league of ['CVHL','NBHL','CWHL']) {
     const html=fs.readFileSync(path.join(root,league,'index.html'),'utf8');
-    assert.match(html,/src="\.\.\/player-ranks.js\?v=1"/);
+    assert.match(html,/src="\.\.\/player-ranks.js\?v=\d+"/);
     assert.match(html,/window.ChelRanks.render/);
     assert.match(html,/isGoalie \? "goalie" : "player", name, true/);
     assert.ok(!html.includes('<strong>${overall}</strong> OVR'));

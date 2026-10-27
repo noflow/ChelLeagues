@@ -9,6 +9,7 @@
   const thresholds = [70,72,74,76,78,80,82,84,86,88,90,92,94,95,96];
   const centers = [228,513,791,1077,1375];
   const rows = {III:[196,212], II:[412,216], I:[628,244]};
+  let clipSequence = 0;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   function rank(score, gp, goalie = false) {
     const minimum = goalie ? 3 : 4; // Match the current model's qualification gates.
@@ -25,7 +26,9 @@
   }
   function art(tier, division) {
     const [y, height] = rows[division];
-    return `<svg class="cl-rank-art" viewBox="${centers[tier]-128} ${y} 256 ${height}" width="40" height="40" aria-hidden="true" focusable="false"><image href="${escape(asset)}" width="1536" height="1024"/></svg>`;
+    const x = centers[tier]-128;
+    const clip = `cl-rank-crop-${++clipSequence}`;
+    return `<svg class="cl-rank-art" viewBox="${x} ${y} 256 ${height}" width="40" height="40" aria-hidden="true" focusable="false"><defs><clipPath id="${clip}" clipPathUnits="userSpaceOnUse"><rect x="${x}" y="${y}" width="256" height="${height}"/></clipPath></defs><image href="${escape(asset)}" width="1536" height="1024" clip-path="url(#${clip})"/></svg>`;
   }
   function render({score, gp, goalie=false, compact=false}) {
     const value = rank(score, gp, goalie);
