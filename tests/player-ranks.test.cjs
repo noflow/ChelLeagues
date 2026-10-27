@@ -26,7 +26,7 @@ test('unqualified or invalid samples never receive an earned rank',()=>{
   assert.equal(ranks.rank(80,3,true).provisional,false);
 });
 test('badge crops stay within the approved image and include accessible labels',()=>{
-  const png = fs.readFileSync(path.join(root,'assets/player-ranks-v1.png'));
+  const png = fs.readFileSync(path.join(root,'assets/player-ranks-v2.png'));
   const width=png.readUInt32BE(16),height=png.readUInt32BE(20);
   assert.equal(width,1536); assert.equal(height,1024);
   for (const score of ranks.thresholds) {
@@ -35,7 +35,7 @@ test('badge crops stay within the approved image and include accessible labels',
     assert.ok(!html.includes('OVR'));
     const [,x,y,w,h]=html.match(/viewBox="([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)"/).map(Number);
     assert.ok(x>=0&&y>=0&&x+w<=width&&y+h<=height);
-    assert.match(html,/https:\/\/chelleagues.com\/assets\/player-ranks-v1.png/);
+    assert.match(html,/https:\/\/chelleagues.com\/assets\/player-ranks-v2.png/);
     assert.match(html,/clipPathUnits="userSpaceOnUse"/);
     assert.match(html,/clip-path="url\(#cl-rank-crop-\d+\)"/);
   }

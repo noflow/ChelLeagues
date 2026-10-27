@@ -1,8 +1,8 @@
 .cl-player-name{display:inline-flex;align-items:center;gap:8px;vertical-align:middle}
 .cl-player-name-text{white-space:nowrap}
 .cl-player-rank{display:inline-flex;align-items:center;gap:8px;vertical-align:middle;font:700 14px system-ui,sans-serif;line-height:1.3;color:inherit;white-space:nowrap}
-.cl-rank-art{display:block;width:40px;height:40px;flex:none;overflow:hidden;background:#070d18;border-radius:7px}
-.cl-player-rank-compact .cl-rank-art{width:34px;height:34px;border-radius:5px}
+.cl-rank-art{display:block;width:40px;height:40px;flex:none;overflow:hidden;background:transparent;border-radius:0}
+.cl-player-rank-compact .cl-rank-art{width:34px;height:34px;border-radius:0}
 .cl-rank-pending{display:grid;place-items:center;width:34px;height:34px;flex:none;background:#172338;border:1px solid #566980;border-radius:7px;color:#b9cbe1;font-size:22px}
 #modal-meta .cl-player-rank{color:#fff;white-space:normal}
 #modal-meta .cl-rank-art{width:48px;height:48px}
