@@ -2,6 +2,7 @@
 .cl-app-tools{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:12px;max-width:1160px;margin:0 auto;padding:12px 24px;color:var(--gold,#40c6ff);font:600 14px system-ui,sans-serif}
 .cl-app-tools[hidden],.cl-app-tools [hidden]{display:none}
 .cl-app-tools a{color:inherit;margin-right:auto;min-height:44px;display:flex;align-items:center}
+body:has(#player-centre[data-dark="false"]) .cl-app-tools a{color:var(--teal,#153b65)}
 .cl-app-tools button{background:var(--teal2,#153b65);color:#fff;border:1px solid var(--gold,#40c6ff);border-radius:8px;padding:11px 16px;min-height:44px;font:inherit;cursor:pointer}
 .cl-install-dialog{box-sizing:border-box;background:#101b2d;color:#edf5ff;border:1px solid #40c6ff;border-radius:16px;max-width:500px;width:calc(100% - 32px);max-height:calc(100dvh - 48px);margin:auto;padding:24px;font:16px system-ui,sans-serif;overflow:auto}
 .cl-install-dialog::backdrop{background:#000b}
