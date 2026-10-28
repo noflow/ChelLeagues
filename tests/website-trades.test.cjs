@@ -27,3 +27,11 @@ test('incoming offers have accept/decline and sent offers have cancel, with futu
 test('all three league sites receive the same trading behaviour',()=>{
  for(const league of ['NBHL','CWHL'])assert.equal(fs.readFileSync(league+'/player-centre.js','utf8'),source);
 });
+
+test('trade admins see pending reviews and escaped persistent history separately',()=>{
+ const context=vm.createContext({data:{error:'',offers:[{id:'pending',status:'accepted_team',proposing_team:'AAA',receiving_team:'BBB',players_from_proposer:['<player>'],picks_from_receiver:[{label:'Season 4 Round 1'}]},{id:'done',status:'approved',reviewed_by:'Reviewer',reviewed_at:'2026-10-28',admin_note:'<note>',status_label:'Completed'}]}});
+ vm.runInContext(source.slice(source.indexOf('  const E ='),source.indexOf('  let token'))+source.slice(source.indexOf('  const hidden ='),source.indexOf('  const pill ='))+source.slice(source.indexOf('  function tradeReviewView'),source.indexOf('  let draftData='))+';html=tradeReviewView(data);',context);
+ assert.ok(context.html.includes('1 pending'));assert.equal((context.html.match(/data-action="trade-review"/g)||[]).length,1);
+ for(const text of ['&lt;player&gt;','Season 4 Round 1','Reviewer','2026-10-28','&lt;note&gt;','Recent trade history','value="approve"','value="reject"'])assert.ok(context.html.includes(text),text);
+ assert.ok(source.includes('profile.can_review_trades ?'));
+});
