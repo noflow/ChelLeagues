@@ -10,7 +10,8 @@
   const verifierKey = 'player-verifier:' + league;
   const labels = {available:'Available', unavailable:'Unavailable', maybe:'Maybe', none:'No response'};
   const E = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  let token = sessionStorage.getItem(storageKey) || '';
+  let token = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey) || '';
+  if (token) { localStorage.setItem(storageKey,token); sessionStorage.removeItem(storageKey); }
   let profile;
   let tab = 'profile';
   let notice = '';
@@ -46,7 +47,7 @@
     let result;
     try { result = await response.json(); } catch { throw new Error('The account service is temporarily unavailable. Please try again.'); }
     if (!response.ok) {
-      if (response.status === 401) { token=''; profile=null; sessionStorage.removeItem(storageKey); }
+      if (response.status === 401) { token=''; profile=null; sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey); }
       throw new Error(result.error || 'Please try again.');
     }
     return result;
@@ -73,7 +74,7 @@
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Sign-in could not finish. Please try again.');
     token = result.token;
-    sessionStorage.setItem(storageKey,token);
+    localStorage.setItem(storageKey,token);
   }
   const hidden = (name,value) => `<input type="hidden" name="${name}" value="${E(value)}">`;
   const option = (value,label,current) => `<option value="${E(value)}" ${value===current?'selected':''}>${E(label)}</option>`;
@@ -224,7 +225,7 @@
     const command=event.target.closest('[data-command]')?.dataset.command;
     if (!command || busy) return;
     if (command==='login') {try {await signIn();} catch {message('Sign-in could not start. Please enable website storage and try again.',true);}return;}
-    if (command==='logout') {try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey);notice='';signedOut();return;}
+    if (command==='logout') {try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
     tab=command;notice='';await load();
   });
   root.addEventListener('submit',async event=>{
