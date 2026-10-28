@@ -6,12 +6,15 @@
   const league = config.dataset.playerLeague;
   const service = config.dataset.playerService.replace(/\/$/, '');
   if (!league || !service) return;
-  const storageKey = 'player-session:' + league;
+  const sharedSignIn = location.origin === 'https://chelleagues.com';
+  const legacyKeys = sharedSignIn ? ['continental-virtual-hockey-league','nbhl','cwhl'].map(id=>'player-session:'+id) : ['player-session:'+league];
+  const storageKey = sharedSignIn ? 'chelleagues-session' : 'player-session:' + league;
   const verifierKey = 'player-verifier:' + league;
   const labels = {available:'Available', unavailable:'Unavailable', maybe:'Maybe', none:'No response'};
   const E = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  let token = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey) || '';
+  let token = localStorage.getItem(storageKey) || sessionStorage.getItem(storageKey) || legacyKeys.map(key=>localStorage.getItem(key) || sessionStorage.getItem(key)).find(Boolean) || '';
   if (token) { localStorage.setItem(storageKey,token); sessionStorage.removeItem(storageKey); }
+  for (const key of legacyKeys) { sessionStorage.removeItem(key); if(key!==storageKey)localStorage.removeItem(key); }
   let profile;
   let tab = 'profile';
   let notice = '';
@@ -167,6 +170,7 @@
     return `<div class="pc-card"><h3>Team trades · ${E(t.team)}</h3><p class="pc-muted">Both teams agree first. League administration approves before players or picks move.</p><button type="button" data-command="trades">Refresh status</button></div>${t.error?`<p class="pc-notice" role="alert">${E(t.error)}</p>`:''}<details class="pc-card" open><summary>Propose a trade</summary><form data-action="trade-propose"><div class="pc-columns"><section><h3>Your team sends</h3>${tradeChoices(t.team,'proposer')}</section><section><label>Trade with<select name="receiving_team" data-trade-team required><option value="">Choose a team</option>${t.teams.filter(v=>v.abbr!==t.team).map(v=>option(v.abbr,v.name || v.abbr,'')).join('')}</select></label><h3>You receive</h3><div id="pc-trade-receiver">${tradeChoices('','receiver')}</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="pc-muted">Select at least one asset from each team. Rosters, salary limits, and pick ownership are checked when you send or accept an offer.</p><button>Send trade offer</button></form></details><h3>Offers & history</h3>${t.offers.map(o=>`<article class="pc-card"><h3>${E(o.proposing_team)} ↔ ${E(o.receiving_team)}</h3><span class="pc-pill">${E(o.status_label)}</span><div class="pc-columns"><p><strong>${E(o.proposing_team)} sends</strong><br>${packageText(o,'proposer')}</p><p><strong>${E(o.receiving_team)} sends</strong><br>${packageText(o,'receiver')}</p></div>${o.salary_cap_enabled?`<p class="pc-muted">Salary after: ${E(o.proposing_team)} $${E(Number(o.proposer_after).toLocaleString())} · ${E(o.receiving_team)} $${E(Number(o.receiver_after).toLocaleString())} · Cap $${E(Number(o.salary_cap).toLocaleString())}</p>`:''}${o.note?`<p>${E(o.note)}</p>`:''}<p class="pc-muted">${E(o.next_action)}</p>${o.status==='pending_team'?`<form data-action="trade-decision">${hidden('proposal_id',o.id)}<label>Decision<select name="decision">${o.receiving_team===t.team?'<option value="accept">Accept offer</option><option value="decline">Decline offer</option>':'<option value="cancel">Cancel offer</option>'}</select></label><button>Confirm decision</button></form>`:''}</article>`).join('') || '<div class="pc-card">No trade offers for your team yet.</div>'}`;
   }
   async function load(team='') {
+    token = localStorage.getItem(storageKey) || '';
     const generation = ++viewGeneration;
     if (!token) { signedOut(); return; }
     try {
@@ -237,6 +241,11 @@
     try {const result=await call('action/'+form.dataset.action,new FormData(form));notice=result.duplicate?'This offer already exists. Check its status below.':form.dataset.action==='trade-propose'?'Trade offer sent.':'Saved.';await load();}
     catch(error) {notice=error.message;await load();}
     finally {busy=false;if(form.isConnected)form.querySelector('button').disabled=false;}
+  });
+  window.addEventListener('storage',event=>{
+    if(event.key!==storageKey && event.key!==null)return;
+    token=localStorage.getItem(storageKey) || '';profile=null;
+    if(active)load();
   });
   window.addEventListener('hashchange',open);
   open();
