@@ -5,7 +5,7 @@ const vm=require('node:vm');
 const source=fs.readFileSync('CVHL/player-centre.js','utf8');
 function render(data){
   const context=vm.createContext({data});
-  vm.runInContext(source.slice(source.indexOf('  const E ='),source.indexOf('  let token'))+source.slice(source.indexOf('  const hidden ='),source.indexOf('  const pill ='))+source.slice(source.indexOf('  let tradeData;'),source.indexOf('  async function load(team='))+';html=tradeView(data);',context);
+  vm.runInContext(source.slice(source.indexOf('  const E ='),source.indexOf('  let token'))+source.slice(source.indexOf('  const hidden ='),source.indexOf('  const pill ='))+source.slice(source.indexOf('  let tradeData;'),source.indexOf('  let draftData='))+';html=tradeView(data);',context);
   return context.html;
 }
 const base={team:'AAA',teams:[{abbr:'AAA',name:'Own team'},{abbr:'BBB',name:'Other team'}],players:[{name:'<unsafe>',team:'AAA',salary:100},{name:'Other',team:'BBB',salary:200}],picks_enabled:false,picks:[],offers:[]};

@@ -38,19 +38,23 @@
   if (colour && colour.length >= 3) root.dataset.dark = (Number(colour[0])*.2126 + Number(colour[1])*.7152 + Number(colour[2])*.0722 < 110) ? 'true' : 'false';
 
   function shell(content) {
-    root.innerHTML = `<div class="pc-head"><div><h2>My Profile & Availability</h2><p class="pc-muted">Your player. Your team. Your next game.</p></div>${profile ? `<div class="pc-actions"><span>${E(profile.name)}</span>${profile.can_manage_league === true ? `<a class="pc-manage-league" href="https://admin.chelleagues.com/league/${encodeURIComponent(league)}">Manage League</a>` : ''}<button type="button" data-command="logout">Sign out</button></div>` : ''}</div>${notice ? `<div class="pc-notice" role="status">${E(notice)}</div>` : ''}${profile?.management ? `<div class="pc-tabs" role="tablist" aria-label="Player area"><button type="button" role="tab" aria-selected="${tab==='profile'}" data-command="profile">My Profile</button><button type="button" role="tab" aria-selected="${tab==='team'}" data-command="team">Team Availability</button>${profile.can_trade ? `<button type="button" role="tab" aria-selected="${tab==='trades'}" data-command="trades">Trades</button>` : ''}</div>` : ''}<div id="pc-content">${content}</div>`;
+    root.innerHTML = `<div class="pc-head"><div><h2>My Profile & Availability</h2><p class="pc-muted">Your player. Your team. Your next game.</p></div>${profile ? `<div class="pc-actions"><span>${E(profile.name)}</span>${profile.can_manage_league === true ? `<a class="pc-manage-league" href="https://admin.chelleagues.com/league/${encodeURIComponent(league)}">Manage League</a>` : ''}<button type="button" data-command="logout">Sign out</button></div>` : ''}</div>${notice ? `<div class="pc-notice" role="status">${E(notice)}</div>` : ''}${(profile?.management || profile?.can_draft) ? `<div class="pc-tabs" role="tablist" aria-label="Player area"><button type="button" role="tab" aria-selected="${tab==='profile'}" data-command="profile">My Profile</button><button type="button" role="tab" aria-selected="${tab==='team'}" data-command="team">Team Availability</button>${profile.can_trade ? `<button type="button" role="tab" aria-selected="${tab==='trades'}" data-command="trades">Trades</button>` : ''}${profile.can_draft ? `<button type="button" role="tab" aria-selected="${tab==='draft'}" data-command="draft">Snake Draft</button>` : ''}</div>` : ''}<div id="pc-content">${content}</div>`;
   }
   function message(text, error=false) { shell(`<div class="pc-card pc-notice" role="${error ? 'alert':'status'}">${E(text)}</div>`); }
   function signedOut() { profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
   async function call(path, data) {
-    const response = await fetch(`${service}/api/website/${encodeURIComponent(league)}/${path}`, {
+    const callToken=token;
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),15000);
+    let response;
+    try { response = await fetch(`${service}/api/website/${encodeURIComponent(league)}/${path}`, {
       method: data ? 'POST':'GET', credentials:'omit', cache:'no-store',
-      headers:{Authorization:'Bearer '+token}, body:data ? new URLSearchParams(data):undefined
-    });
+      headers:{Authorization:'Bearer '+callToken}, body:data ? new URLSearchParams(data):undefined, signal:controller.signal
+    }); } catch(error) {if(error.name==='AbortError')throw new Error(data?'The server has not confirmed this action. Check the latest status before trying again.':'Live updates are delayed. Reconnecting…');throw error;} finally {clearTimeout(timeout);}
     let result;
     try { result = await response.json(); } catch { throw new Error('The account service is temporarily unavailable. Please try again.'); }
     if (!response.ok) {
-      if (response.status === 401) { token=''; profile=null; sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey); }
+      if (response.status === 401 && token===callToken) { token=''; profile=null; sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey); }
       throw new Error(result.error || 'Please try again.');
     }
     return result;
@@ -169,13 +173,65 @@
     const packageText=(o,side)=>[...(o['players_from_'+side] || []),...(o['picks_from_'+side] || []).map(p=>p.label)].map(E).join(', ') || 'None';
     return `<div class="pc-card"><h3>Team trades · ${E(t.team)}</h3><p class="pc-muted">Both teams agree first. League administration approves before players or picks move.</p><button type="button" data-command="trades">Refresh status</button></div>${t.error?`<p class="pc-notice" role="alert">${E(t.error)}</p>`:''}<details class="pc-card" open><summary>Propose a trade</summary><form data-action="trade-propose"><div class="pc-columns"><section><h3>Your team sends</h3>${tradeChoices(t.team,'proposer')}</section><section><label>Trade with<select name="receiving_team" data-trade-team required><option value="">Choose a team</option>${t.teams.filter(v=>v.abbr!==t.team).map(v=>option(v.abbr,v.name || v.abbr,'')).join('')}</select></label><h3>You receive</h3><div id="pc-trade-receiver">${tradeChoices('','receiver')}</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="pc-muted">Select at least one asset from each team. Rosters, salary limits, and pick ownership are checked when you send or accept an offer.</p><button>Send trade offer</button></form></details><h3>Offers & history</h3>${t.offers.map(o=>`<article class="pc-card"><h3>${E(o.proposing_team)} ↔ ${E(o.receiving_team)}</h3><span class="pc-pill">${E(o.status_label)}</span><div class="pc-columns"><p><strong>${E(o.proposing_team)} sends</strong><br>${packageText(o,'proposer')}</p><p><strong>${E(o.receiving_team)} sends</strong><br>${packageText(o,'receiver')}</p></div>${o.salary_cap_enabled?`<p class="pc-muted">Salary after: ${E(o.proposing_team)} $${E(Number(o.proposer_after).toLocaleString())} · ${E(o.receiving_team)} $${E(Number(o.receiver_after).toLocaleString())} · Cap $${E(Number(o.salary_cap).toLocaleString())}</p>`:''}${o.note?`<p>${E(o.note)}</p>`:''}<p class="pc-muted">${E(o.next_action)}</p>${o.status==='pending_team'?`<form data-action="trade-decision">${hidden('proposal_id',o.id)}<label>Decision<select name="decision">${o.receiving_team===t.team?'<option value="accept">Accept offer</option><option value="decline">Decline offer</option>':'<option value="cancel">Cancel offer</option>'}</select></label><button>Confirm decision</button></form>`:''}</article>`).join('') || '<div class="pc-card">No trade offers for your team yet.</div>'}`;
   }
+  let draftData=null, draftReceivedAt=0, draftServerTime=0, draftPolling=false, draftStale=false;
+  function draftView(d) {
+    const t=d.draft;
+    const status=t.draft_paused?'Draft paused for a break':!d.enabled?'Draft is not open':t.ownership_error?'Ownership needs review':t.complete?'Draft complete':t.busy?'Saving the previous pick…':t.next_team?`${t.next_team} is picking`:'Waiting for starting order';
+    const controls=d.admin && t.order.length ? `<div class="pc-actions"><form data-action="draft-pause">${hidden('turn_key',t.turn_key)}${hidden('action',t.draft_paused?'resume':'pause')}<button data-draft-control>${t.draft_paused?'Resume draft':'Pause draft'}</button></form>${d.enabled && t.clock.seconds && !t.draft_paused && !t.busy && !t.ownership_error && t.next_team?`<form data-action="draft-restart">${hidden('turn_key',t.turn_key)}<button data-draft-control>Restart pick clock</button></form>`:''}</div>`:'';
+    const picker=d.can_pick?`<form data-action="draft-pick">${hidden('cursor',t.cursor)}${hidden('turn_key',t.turn_key)}<label>Choose a player for ${E(t.next_team)}<select name="auction_id" required><option value="">Select a player</option>${d.players.map(p=>option(p.id,p.name+' · '+(p.position || 'Position not listed'),null)).join('')}</select></label><button data-draft-pick ${d.players.length?'':'disabled'}>Draft selected player</button></form>`:`<p class="pc-muted">${t.draft_paused?'An admin will resume the draft after the break.':t.clock.expired?'Time expired. An admin can pick or restart the clock.':t.next_team?'Waiting for '+E(t.next_team)+'. Picks are available only on your team’s turn.':'An admin must prepare the draft before picks can begin.'}</p>`;
+    const rows=d.history.map(p=>`<tr><td>${Math.floor(p.slot/t.order.length)+1} / ${p.slot%t.order.length+1}</td><td>${E(p.original_team)}</td><td>${E(p.team)}</td><td>${E(p.player_name)}</td><td>${p.status==='closed'?'Saved to roster':p.status==='error'?'Needs admin attention':'Saving…'}</td></tr>`).join('');
+    return `<section class="pc-card pc-draft-head"><div><h3>${E(status)}</h3><p>${E(t.season_label || 'Snake draft')}${t.round?' · Round '+E(t.round)+' · Pick '+E(t.pick):''}</p><p class="pc-muted">${t.original_team?E(t.original_team)+' original pick · ':''}Your team: ${E(d.team || 'League admin')}</p></div><div class="pc-draft-clock" role="timer" aria-label="Pick time remaining">—</div></section><p id="pc-draft-sync" class="pc-muted" role="status">Live updates connected</p>${d.error || t.ownership_error?`<p class="pc-notice" role="alert">${E(d.error || t.ownership_error)}</p>`:''}${controls}<div class="pc-dashboard"><section class="pc-panel"><div class="pc-panel-head"><h3>Make your pick</h3></div><div class="pc-draft-picker">${picker}<p class="pc-muted">Salary per pick: $${E(Number(d.salary).toLocaleString())}</p></div><div class="pc-scroll pc-table"><table><thead><tr><th>Available player</th><th>Position</th><th>Availability</th></tr></thead><tbody>${d.players.map(p=>`<tr><td>${E(p.name)}</td><td>${E(p.position)}</td><td>${E(p.availability)}</td></tr>`).join('') || '<tr><td colspan="3">No players available.</td></tr>'}</tbody></table></div></section><section class="pc-panel"><div class="pc-panel-head"><h3>Pick history</h3></div><div class="pc-scroll pc-table"><table><thead><tr><th>Round / Pick</th><th>Original</th><th>Owner</th><th>Player</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No picks yet.</td></tr>'}</tbody></table></div></section></div>`;
+  }
+  function draftClockText(clock, remaining) {
+    const format=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+    if(clock.on_break)return 'Paused'+(clock.seconds?' · '+format(Math.ceil(clock.remaining || 0)):'');
+    if(!clock.seconds)return 'No clock';
+    if(clock.paused)return 'Waiting';
+    if(clock.expired || remaining<=0)return 'Time expired';
+    return format(remaining);
+  }
+  function tickDraft() {
+    if(!active || tab!=='draft' || !draftData)return;
+    const clock=draftData.draft.clock;
+    const remaining=clock.deadline?Math.max(0,Math.ceil((Date.parse(clock.deadline)-draftServerTime-(performance.now()-draftReceivedAt))/1000)):0;
+    const stale=draftStale || performance.now()-draftReceivedAt>15000;
+    const expired=clock.expired || (clock.deadline && remaining<=0);
+    const display=root.querySelector('.pc-draft-clock');
+    if(display){display.textContent=draftClockText(clock,remaining);display.classList.toggle('urgent',!clock.on_break && !!clock.deadline && remaining<=15);}
+    const sync=root.querySelector('#pc-draft-sync');if(sync)sync.textContent=stale?'Live updates delayed. Picking is disabled until reconnected.':'Live updates connected';
+    const pick=root.querySelector('[data-draft-pick]');
+    if(pick)pick.disabled=busy || stale || !draftData.can_pick || !draftData.players.length || (!draftData.admin && !!expired);
+    root.querySelectorAll('[data-draft-control]').forEach(button=>button.disabled=busy || stale);
+  }
+  function receiveDraft(d, initial=false) {
+    const sameTurn=draftData?.draft.turn_key===d.draft.turn_key;
+    const selection=sameTurn?root.querySelector('select[name="auction_id"]')?.value:'';
+    const comparable=value=>JSON.stringify(value && {...value,server_time:''});
+    const changed=initial || comparable(draftData)!==comparable(d);
+    draftData=d;draftReceivedAt=performance.now();draftServerTime=Date.parse(d.server_time);draftStale=false;
+    if(changed){if(initial)shell(draftView(d));else root.querySelector('#pc-content').innerHTML=draftView(d);const select=root.querySelector('select[name="auction_id"]');if(select && selection && d.players.some(p=>String(p.id)===selection))select.value=selection;}
+    tickDraft();
+  }
+  async function refreshDraft() {
+    if(!active || tab!=='draft' || !token || document.hidden || busy || draftPolling)return;
+    const generation=viewGeneration, sessionToken=token;
+    draftPolling=true;
+    try {const d=await call('draft');if(active && !busy && tab==='draft' && generation===viewGeneration && token===sessionToken)receiveDraft(d);}
+    catch(error){if(active && tab==='draft' && generation===viewGeneration){draftStale=true;if(!token){notice=error.message;signedOut();}else tickDraft();}}
+    finally {draftPolling=false;}
+  }
+  setInterval(tickDraft,250);
+  setInterval(refreshDraft,3000);
+  document.addEventListener('visibilitychange',refreshDraft);
+  window.addEventListener('focus',refreshDraft);
   async function load(team='') {
     token = localStorage.getItem(storageKey) || '';
     const generation = ++viewGeneration;
-    if (!token) { signedOut(); return; }
+    if (!token) { draftData=null;signedOut(); return; }
     try {
       message('Loading your player area…');
       if (!profile || tab==='profile') profile = await call('profile');
+      if(tab==='draft'){const d=await call('draft');if(active && generation===viewGeneration)receiveDraft(d,true);return;}
       const content = tab==='trades' ? tradeView(await call('trades')) : tab==='team' ? teamView(await call('team'+(team?'?team='+encodeURIComponent(team):''))) : profileView(profile);
       if (active && generation===viewGeneration) { shell(content); if(tab==='profile' && profile.link) {renderResults(); loadResults(generation);} }
     } catch(error) {
@@ -229,7 +285,7 @@
     const command=event.target.closest('[data-command]')?.dataset.command;
     if (!command || busy) return;
     if (command==='login') {try {await signIn();} catch {message('Sign-in could not start. Please enable website storage and try again.',true);}return;}
-    if (command==='logout') {try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
+    if (command==='logout') {++viewGeneration;draftData=null;try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
     tab=command;notice='';await load();
   });
   root.addEventListener('submit',async event=>{
@@ -238,9 +294,9 @@
     if(form.hasAttribute('data-team-selector')) {await load(new FormData(form).get('team'));return;}
     busy=true;
     form.querySelector('button').disabled=true;
-    try {const result=await call('action/'+form.dataset.action,new FormData(form));notice=result.duplicate?'This offer already exists. Check its status below.':form.dataset.action==='trade-propose'?'Trade offer sent.':'Saved.';await load();}
+    try {const result=await call('action/'+form.dataset.action,new FormData(form));notice=form.dataset.action==='draft-pick'?'Pick submitted. Check its roster status in pick history.':form.dataset.action==='draft-pause'?'Draft status updated.':form.dataset.action==='draft-restart'?'Pick clock restarted.':result.duplicate?'This offer already exists. Check its status below.':form.dataset.action==='trade-propose'?'Trade offer sent.':'Saved.';await load();}
     catch(error) {notice=error.message;await load();}
-    finally {busy=false;if(form.isConnected)form.querySelector('button').disabled=false;}
+    finally {busy=false;if(form.isConnected)form.querySelector('button').disabled=false;tickDraft();}
   });
   window.addEventListener('storage',event=>{
     if(event.key!==storageKey && event.key!==null)return;
