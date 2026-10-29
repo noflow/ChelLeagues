@@ -112,3 +112,8 @@
 #player-centre .pc-line-game-head time{font-weight:800;white-space:nowrap}
 #player-centre [data-night-errors]:not(:empty){color:var(--pc-ink);border-left:4px solid #ed174c;padding:12px;background:#ed174c18}
 @media(max-width:600px){#player-centre .pc-line-game-head{flex-direction:column;gap:4px}#player-centre .pc-game-tabs button{flex:1;min-width:72px}}
+
+#player-centre .pc-lines-grid>label{display:flex;align-items:center;gap:8px;min-width:0}
+#player-centre .pc-lines-grid .pc-line-position{flex:0 0 44px;width:44px;height:44px;min-width:44px;min-height:44px;box-sizing:border-box;padding:0;margin:0}
+#player-centre .pc-lines-grid select{flex:1;min-width:0;width:0}
+@media(max-width:600px){#player-centre .pc-lines-grid{grid-template-columns:1fr;gap:12px}}
