@@ -1,0 +1,6 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const src=fs.readFileSync('CVHL/player-centre.js','utf8');
+function fixture(){let now=0,calls=0;const ctx=vm.createContext({token:'first',structuredClone,Date:{now:()=>now},call:async()=>({count:++calls})});vm.runInContext(src.slice(src.indexOf('  const viewCache'),src.indexOf("  let tab =")),ctx);return {ctx,read:()=>vm.runInContext("readView('lines')",ctx),advance:()=>now+=15001,calls:()=>calls};}
+test('returning to a tab reuses data briefly without sharing mutable editor objects',async()=>{const f=fixture();const first=await f.read();first.count=99;assert.equal((await f.read()).count,1);assert.equal(f.calls(),1);f.advance();assert.equal((await f.read()).count,2);});
+test('account changes and actions invalidate tab snapshots',async()=>{const f=fixture();await f.read();f.ctx.token='second';assert.equal((await f.read()).count,2);vm.runInContext('clearViews()',f.ctx);assert.equal((await f.read()).count,3);});
+test('a response started before an action cannot repopulate the cache',async()=>{const f=fixture();let resolve;f.ctx.call=()=>new Promise(r=>resolve=r);const pending=f.read();vm.runInContext('clearViews()',f.ctx);resolve({count:1});await pending;assert.equal(vm.runInContext('viewCache.size',f.ctx),0);});

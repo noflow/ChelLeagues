@@ -16,6 +16,16 @@
   if (token) { localStorage.setItem(storageKey,token); sessionStorage.removeItem(storageKey); }
   for (const key of legacyKeys) { sessionStorage.removeItem(key); if(key!==storageKey)localStorage.removeItem(key); }
   let profile;
+  const viewCache = new Map();
+  let cacheEpoch = 0;
+  function clearViews() { viewCache.clear(); cacheEpoch++; }
+  async function readView(path) {
+    const entry=viewCache.get(path);
+    if(entry && entry.token===token && Date.now()-entry.at<15000)return structuredClone(entry.value);
+    const owner=token,epoch=cacheEpoch,value=await call(path);
+    if(token===owner && epoch===cacheEpoch && !value.error)viewCache.set(path,{token:owner,at:Date.now(),value:structuredClone(value)});
+    return value;
+  }
   let tab = 'profile';
   let linesTeam = '';
   let pairingCode = '';
@@ -43,9 +53,10 @@
     root.innerHTML = `<div class="pc-head"><div><h2>My Profile & Availability</h2><p class="pc-muted">Your player. Your team. Your next game.</p></div>${profile ? `<div class="pc-actions"><span>${E(profile.name)}</span>${profile.can_manage_league === true ? `<a class="pc-manage-league" href="https://admin.chelleagues.com/league/${encodeURIComponent(league)}">Manage League</a>` : ''}<button type="button" data-command="logout">Sign out</button></div>` : ''}</div>${notice ? `<div class="pc-notice" role="status">${E(notice)}</div>` : ''}${(profile?.management || profile?.can_draft || profile?.can_review_trades) ? `<div class="pc-tabs" role="tablist" aria-label="Player area"><button type="button" role="tab" aria-selected="${tab==='profile'}" data-command="profile">My Profile</button><button type="button" role="tab" aria-selected="${tab==='team'}" data-command="team">Team Availability</button>${profile.can_manage_lines ? `<button type="button" role="tab" aria-selected="${tab==='lines'}" data-command="lines">Team Lines</button>` : ''}${profile.can_trade ? `<button type="button" role="tab" aria-selected="${tab==='trades'}" data-command="trades">Trades</button>` : ''}${profile.can_review_trades ? `<button type="button" role="tab" aria-selected="${tab==='trade-reviews'}" data-command="trade-reviews">Trade Approvals</button>` : ''}${profile.can_draft ? `<button type="button" role="tab" aria-selected="${tab==='draft'}" data-command="draft">Snake Draft</button>` : ''}</div>` : ''}<div id="pc-content">${content}</div>`;
   }
   function message(text, error=false) { shell(`<div class="pc-card pc-notice" role="${error ? 'alert':'status'}">${E(text)}</div>`); }
-  function signedOut() { profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
+  function signedOut() { clearViews(); profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
   async function call(path, data) {
     const callToken=token;
+    if(data)clearViews();
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),15000);
     let response;
@@ -59,6 +70,7 @@
       if (response.status === 401 && token===callToken) { token=''; profile=null; sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey); }
       throw new Error(result.error || 'Please try again.');
     }
+    if(data)clearViews();
     return result;
   }
   async function signIn() {
@@ -284,9 +296,13 @@
     if (!token) { draftData=null;signedOut(); return; }
     try {
       message('Loading your player areaâ€¦');
-      if (!profile || tab==='profile') profile = await call('profile');
-      if(tab==='draft'){const d=await call('draft');if(active && generation===viewGeneration)receiveDraft(d,true);return;}
-      const content = tab==='lines' ? linesView(await call('lines?team='+encodeURIComponent(team || linesTeam))) : tab==='trade-reviews' ? tradeReviewView(await call('trade-reviews')) : tab==='trades' ? tradeView(await call('trades')) : tab==='team' ? teamView(await call('team'+(team?'?team='+encodeURIComponent(team):''))) : profileView(profile);
+      const selectedTab=tab;
+      const path=selectedTab==='lines'?'lines?team='+encodeURIComponent(team || linesTeam):selectedTab==='team'?'team'+(team?'?team='+encodeURIComponent(team):''):selectedTab;
+      const [nextProfile, data]=await Promise.all([readView('profile'),selectedTab==='profile'?Promise.resolve(null):selectedTab==='draft'?call('draft'):readView(path)]);
+      if(!active || generation!==viewGeneration)return;
+      profile=nextProfile;
+      if(selectedTab==='draft'){receiveDraft(data,true);return;}
+      const content=selectedTab==='lines'?linesView(data):selectedTab==='trade-reviews'?tradeReviewView(data):selectedTab==='trades'?tradeView(data):selectedTab==='team'?teamView(data):profileView(profile);
       if (active && generation===viewGeneration) { shell(content); if(tab==='lines')constrainLines(); if(tab==='profile' && profile.link) {renderResults(); loadResults(generation);} }
     } catch(error) {
       if (generation!==viewGeneration) return;
@@ -348,6 +364,8 @@
       if(!game)return;
       busy=true;
       root.querySelectorAll('[data-game]').forEach(b=>b.disabled=true);
+      response.textContent='Saving…';
+      response.setAttribute('aria-busy','true');
       try {
         await call('action/availability',{game_key:game.key,status:response.dataset.status,note:game.response.note || ''});
         game.response.status=response.dataset.status;notice='Availability saved.';
