@@ -232,18 +232,39 @@
   setInterval(refreshDraft,3000);
   document.addEventListener('visibilitychange',refreshDraft);
   window.addEventListener('focus',refreshDraft);
+  function connectionView(t) {
+    if(t.server?.healthy)pairingCode='';
+    return league==='continental-virtual-hockey-league' ? (t.server?.healthy ? '' : `<details class="pc-card" ${t.server?.guild?'open':''}><summary>Team Discord connection</summary><p>${t.server?.guild ? 'The Discord connection needs attention. Check that Statbot is online and can access the selected channel, or reconnect below.' : 'Connect Statbot to your team server to post lineups.'}</p><p>Invite Statbot to the team server, then generate a code here. A server manager runs /team-setup with that code and selects the lineup channel. Codes expire after 10 minutes. Generating a new code disconnects the previous connection.</p>${pairingCode?`<p class="pc-notice">Connection code: <code style="overflow-wrap:anywhere">${E(pairingCode)}</code></p>`:''}<form data-action="team-server">${hidden('team',t.team)}<button name="intent" value="connect">Generate connection code</button> <button name="intent" value="disconnect">Disconnect team server</button></form></details>`) : '<p class="pc-muted">Discord team-server posting is currently supported by CVHL Statbot.</p>';
+  }
   const linePositions=['LW','C','RW','LD','RD','G'];
   function linesView(t) {
     linesTeam=t.team;
 
-    const connection=league==='continental-virtual-hockey-league' ? `<details class="pc-card"><summary>Team Discord connection</summary><p>${t.server?.guild ? 'Connected to Discord. Lineups post to channel '+E(t.server.channel)+'.' : 'Connect Statbot to your team server to post lineups.'}</p><p>Invite Statbot to the team server, then generate a code here. A server manager runs /team-setup with that code and selects the lineup channel. Codes expire after 10 minutes. Generating a new code disconnects the previous connection.</p>${pairingCode?`<p class="pc-notice">Connection code: <code style="overflow-wrap:anywhere">${E(pairingCode)}</code></p>`:''}<form data-action="team-server">${hidden('team',t.team)}<button name="intent" value="connect">Generate connection code</button> <button name="intent" value="disconnect">Disconnect team server</button></form></details>` : '<p class="pc-muted">Discord team-server posting is currently supported by CVHL Statbot.</p>';
+    const connection=connectionView(t);
     const statuses={draft:'Draft',queued:'Queued for Discord — refresh for delivery status',posted:'Posted to Discord','needs-review':'Needs review — check availability or the Discord message before reposting'};
-    return `<div class="pc-card"><h3>${E(t.team)} · Team Lines</h3><p>Choose six players marked Available for each game. Game codes come from the schedule.</p><button type="button" data-command="lines">Refresh status</button></div>${connection}${t.games.map(g=>{
+    return `<div class="pc-card"><h3>${E(t.team)} · Team Lines</h3><p>Choose six players marked Available for each game. Game codes come from the schedule.</p><button type="button" data-command="lines">Refresh status</button></div><div id="pc-team-connection" data-connection-state="${E(JSON.stringify(t.server || null))}">${connection}</div>${t.games.map(g=>{
       const line=g.line, slots=line?.slots || {}, eligible=g.eligible;
       const invalid=Object.values(slots).some(k=>k && !Object.hasOwn(eligible,k));
       return `<article class="pc-card"><h3>${E(g.time)} · ${E(g.away)} @ ${E(g.home)}</h3><p class="pc-muted">${E(g.date)} · ${E(g.timezone)} · Server: ${E(g.server || 'Not selected')}</p><span class="pc-pill">${E(statuses[line?.status] || 'Not set')}</span><p>Game code: <strong>${E(g.game_code || 'Not set in schedule')}</strong></p>${invalid?'<p class="pc-notice" role="alert">A selected player is no longer Available. Choose a replacement before posting.</p>':''}<form data-action="lines">${hidden('team',t.team)}${hidden('game',g.key)}${hidden('revision',line?.revision || 0)}<div class="pc-lines-grid">${linePositions.map(pos=>`<label><span class="pc-line-position" data-position="${pos}">${pos}</span><select name="${pos}" data-line-position aria-label="${pos}" required><option value="">Choose available player</option>${Object.entries(eligible).map(([key,name])=>`<option value="${E(key)}" ${slots[pos]===key?'selected':''}>${E(name)} · Available</option>`).join('')}</select></label>`).join('')}</div>${Object.keys(eligible).length<6?`<p class="pc-muted">${Object.keys(eligible).length} available players. Six are required to post.</p>`:''}<div class="pc-actions"><button name="intent" value="draft" formnovalidate ${line?.status==='queued'?'disabled':''}>Save Draft</button><button name="intent" value="post" ${!t.server?.guild || line?.status==='queued'?'disabled':''}>${line?.status==='posted'?'Update Discord Post':'Post to Team Discord'}</button>${line?.status==='needs-review'?'<button name="intent" value="replace">Post replacement message (may duplicate)</button>':''}</div>${line?`<p class="pc-muted">Saved by ${E(line.updated_by)} · ${E(new Date(line.updated_at*1000).toLocaleString())}</p>`:''}</form></article>`;
     }).join('') || '<p>No upcoming games.</p>'}`;
   }
+  let checkingConnection=false;
+  async function refreshConnection() {
+    if(!active || tab!=='lines' || !token || busy || checkingConnection || document.hidden)return;
+    const generation=viewGeneration;
+    checkingConnection=true;
+    try {
+      const state=await call('team-server');
+      const panel=root.querySelector('#pc-team-connection');
+      if(active && tab==='lines' && generation===viewGeneration && panel) {
+        const signature=JSON.stringify(state.server || null);
+        if(panel.dataset.connectionState!==signature){panel.innerHTML=connectionView(state);panel.dataset.connectionState=signature;}
+      }
+    } catch(error) { /* A temporary API outage does not discard unsaved lineups. */ }
+    finally {checkingConnection=false;}
+  }
+  setInterval(refreshConnection,15000);
+  window.addEventListener('focus',refreshConnection);
   function constrainLines() {
     root.querySelectorAll('form[data-action="lines"]').forEach(form=>{
       const selects=[...form.querySelectorAll('[data-line-position]')];

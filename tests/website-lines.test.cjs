@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const src=fs.readFileSync('CVHL/player-centre.js','utf8');
-const helpers=src.slice(src.indexOf('  const E ='),src.indexOf('  let token'))+src.slice(src.indexOf('  const hidden ='),src.indexOf('  const pill ='))+src.slice(src.indexOf('  const linePositions='),src.indexOf('  function constrainLines'));
+const helpers=src.slice(src.indexOf('  const E ='),src.indexOf('  let token'))+src.slice(src.indexOf('  const hidden ='),src.indexOf('  const pill ='))+src.slice(src.indexOf('  function connectionView'),src.indexOf('  let checkingConnection'));
 function render(data){const ctx=vm.createContext({data,league:'continental-virtual-hockey-league',pairingCode:'',linesTeam:''});vm.runInContext(helpers+';html=linesView(data);',ctx);return ctx.html;}
 test('line editor uses six available-only slots and escaped schedule codes',()=>{
  const html=render({team:'BUF',admin:false,games:[{key:'x',date:'2026-10-30',time:'9 PM',home:'BUF',away:'TOR',game_code:'<secret>',eligible:{player:'<player>'},line:null}],server:null});
@@ -26,4 +26,15 @@ test('line tab requires management assignment and has no team switcher even for 
  for(const [pos,colour] of Object.entries({C:'#ed174c',LW:'#00c853',RW:'#1736a6',LD:'#00bcd4',RD:'#ffdc00',G:'#a83ee8'})) {
   assert.ok(css.includes('[data-position="'+pos+'"]{background:'+colour));
  }
+});
+
+test('healthy Discord connections hide setup while broken ones show reconnection',()=>{
+ const healthy=render({team:'BUF',games:[],server:{guild:'123',channel:'456',healthy:true}});
+ assert.ok(!healthy.includes('<summary>Team Discord connection</summary>'));
+ const broken=render({team:'BUF',games:[],server:{guild:'123',channel:'456',healthy:false}});
+ assert.ok(broken.includes('<summary>Team Discord connection</summary>'));
+ assert.ok(broken.includes('connection needs attention'));
+ const absent=render({team:'BUF',games:[],server:null});
+ assert.ok(absent.includes('Generate connection code'));
+ assert.ok(src.includes("panel.innerHTML=connectionView(state)"));
 });
