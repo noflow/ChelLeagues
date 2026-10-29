@@ -1732,7 +1732,7 @@
   nav .player-centre-nav:hover {background:rgba(255,255,255,.22);}
 </style>
 <link rel="stylesheet" href="player-centre.css?v=line-squares-1">
-<script defer src="player-centre.js?v=line-tabs-3" data-player-league="nbhl" data-player-service="https://api-toolbox.onrender.com"></script>
+<script defer src="player-centre.js?v=player-stream-1" data-player-league="nbhl" data-player-service="https://api-toolbox.onrender.com"></script>
 <link rel="icon" type="image/png" href="../assets/chel-leagues-icon.png">
 <link rel="manifest" href="../manifest.webmanifest">
 <meta name="theme-color" content="#070d18">
@@ -6274,6 +6274,17 @@ async function openPlayerModal(playerName, rowData, headers, isGoalie, season = 
   };
 
   document.getElementById("modal-name").textContent = playerName;
+  document.getElementById('player-stream-link')?.remove();
+  const streamConfig=document.querySelector('script[data-player-league]');
+  if(streamConfig) fetch(streamConfig.dataset.playerService.replace(/\/$/,'')+'/api/website/'+encodeURIComponent(streamConfig.dataset.playerLeague)+'/player-stream?name='+encodeURIComponent(playerName))
+    .then(r=>r.ok?r.json():{}).then(data=>{
+      if(window._activePlayerCard?.playerName!==playerName || !data.stream_url)return;
+      const url=new URL(data.stream_url);
+      if(url.protocol!=='https:' || !['twitch.tv','www.twitch.tv','youtube.com','www.youtube.com','m.youtube.com','youtu.be'].includes(url.hostname))return;
+      document.getElementById('player-stream-link')?.remove();
+      const a=document.createElement('a');a.id='player-stream-link';a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';a.textContent=url.hostname.includes('twitch')?'Watch on Twitch':'Watch on YouTube';a.style.cssText='display:inline-block;margin:10px 0;color:#45dfff';
+      document.getElementById('modal-name').after(a);
+    }).catch(()=>{});
   updatePlayerModalMeta(activeRole);
 
   const tabs = [];
