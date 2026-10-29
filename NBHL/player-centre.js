@@ -16,6 +16,7 @@
   if (token) { localStorage.setItem(storageKey,token); sessionStorage.removeItem(storageKey); }
   for (const key of legacyKeys) { sessionStorage.removeItem(key); if(key!==storageKey)localStorage.removeItem(key); }
   let profile;
+  let approvalCount=null,checkingApprovalCount=false;
   const viewCache = new Map();
   let cacheEpoch = 0;
   function clearViews(keep=false) { if(keep){for(const entry of viewCache.values())entry.at=0;}else viewCache.clear(); cacheEpoch++; }
@@ -55,10 +56,10 @@
   if (colour && colour.length >= 3) root.dataset.dark = (Number(colour[0])*.2126 + Number(colour[1])*.7152 + Number(colour[2])*.0722 < 110) ? 'true' : 'false';
 
   function shell(content) {
-    root.innerHTML = `<div class="pc-head"><div><h2>My Profile & Availability</h2><p class="pc-muted">Your player. Your team. Your next game.</p></div>${profile ? `<div class="pc-actions"><span>${E(profile.name)}</span>${profile.can_manage_league === true ? `<a class="pc-manage-league" href="https://admin.chelleagues.com/league/${encodeURIComponent(league)}">Manage League</a>` : ''}<button type="button" data-command="logout">Sign out</button></div>` : ''}</div>${notice ? `<div class="pc-notice" role="status">${E(notice)}</div>` : ''}${(profile?.management || profile?.can_draft || profile?.can_review_trades) ? `<div class="pc-tabs" role="tablist" aria-label="Player area"><button type="button" role="tab" aria-selected="${tab==='profile'}" data-command="profile">My Profile</button><button type="button" role="tab" aria-selected="${tab==='team'}" data-command="team">Team Availability</button>${profile.can_manage_lines ? `<button type="button" role="tab" aria-selected="${tab==='lines'}" data-command="lines">Team Lines</button>` : ''}${profile.can_trade ? `<button type="button" role="tab" aria-selected="${tab==='trades'}" data-command="trades">Trades</button>` : ''}${profile.can_review_trades ? `<button type="button" role="tab" aria-selected="${tab==='trade-reviews'}" data-command="trade-reviews">Trade Approvals</button>` : ''}${profile.can_draft ? `<button type="button" role="tab" aria-selected="${tab==='draft'}" data-command="draft">Snake Draft</button>` : ''}</div>` : ''}<div id="pc-content">${content}</div>`;
+    root.innerHTML = `<div class="pc-head"><div><h2>My Profile & Availability</h2><p class="pc-muted">Your player. Your team. Your next game.</p></div>${profile ? `<div class="pc-actions"><span>${E(profile.name)}</span>${profile.can_manage_league === true ? `<a class="pc-manage-league" href="https://admin.chelleagues.com/league/${encodeURIComponent(league)}">Manage League</a>` : ''}<button type="button" data-command="logout">Sign out</button></div>` : ''}</div>${notice ? `<div class="pc-notice" role="status">${E(notice)}</div>` : ''}${(profile?.management || profile?.can_draft || profile?.can_review_trades) ? `<div class="pc-tabs" role="tablist" aria-label="Player area"><button type="button" role="tab" aria-selected="${tab==='profile'}" data-command="profile">My Profile</button><button type="button" role="tab" aria-selected="${tab==='team'}" data-command="team">Team Availability</button>${profile.can_manage_lines ? `<button type="button" role="tab" aria-selected="${tab==='lines'}" data-command="lines">Team Lines</button>` : ''}${profile.can_trade ? `<button type="button" role="tab" aria-selected="${tab==='trades'}" data-command="trades">Trades</button>` : ''}${profile.can_review_trades ? `<button type="button" role="tab" aria-selected="${tab==='trade-reviews'}" data-command="trade-reviews">Trade Approvals <span data-approval-count class="pc-pill" aria-label="Pending approvals">${approvalCount===null?'…':approvalCount}</span></button>` : ''}${profile.can_draft ? `<button type="button" role="tab" aria-selected="${tab==='draft'}" data-command="draft">Snake Draft</button>` : ''}</div>` : ''}<div id="pc-content">${content}</div>`;
   }
   function message(text, error=false) { shell(`<div class="pc-card pc-notice" role="${error ? 'alert':'status'}">${E(text)}</div>`); }
-  function signedOut() { for(const state of lineSaves.values())clearTimeout(state.timer);lineSaves.clear();clearViews(); availabilityPending.clear();availabilityInFlight.clear();availabilityStatus='';clearTimeout(availabilityTimer);profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
+  function signedOut() { approvalCount=null; for(const state of lineSaves.values())clearTimeout(state.timer);lineSaves.clear();clearViews(); availabilityPending.clear();availabilityInFlight.clear();availabilityStatus='';clearTimeout(availabilityTimer);profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
   async function call(path, data) {
     const callToken=token;
     if(data)clearViews(path==='action/availability');
@@ -201,6 +202,7 @@
   function tradeReviewView(t) {
     tradeReviewSignature=JSON.stringify(t);
     const pending=t.offers.filter(o=>o.status==='accepted_team');
+    approvalCount=pending.length;
     const packageText=(o,side)=>[...(o['players_from_'+side] || []),...(o['picks_from_'+side] || []).map(p=>p.label)].map(E).join(', ') || 'None';
     const card=(o,review)=>`<article class="pc-card"><h3>${E(o.proposing_team)} ↔ ${E(o.receiving_team)}</h3><span class="pc-pill">${E(o.status_label)}</span><div class="pc-columns"><p><strong>${E(o.proposing_team)} sends</strong><br>${packageText(o,'proposer')}</p><p><strong>${E(o.receiving_team)} sends</strong><br>${packageText(o,'receiver')}</p></div>${o.salary_cap_enabled?`<p>Salary after: ${E(o.proposing_team)} $${E(Number(o.proposer_after).toLocaleString())} · ${E(o.receiving_team)} $${E(Number(o.receiver_after).toLocaleString())} · Cap $${E(Number(o.salary_cap).toLocaleString())}</p>`:''}${o.note?`<p>Offer note: ${E(o.note)}</p>`:''}<p class="pc-muted">${E(o.next_action)}</p>${o.reviewed_by?`<p>Reviewed by ${E(o.reviewed_by)} · ${E(o.reviewed_at)}</p>`:''}${o.admin_note?`<p>League note: ${E(o.admin_note)}</p>`:''}${review?`<form data-action="trade-review">${hidden('proposal_id',o.id)}<label>League note<textarea name="admin_note" maxlength="1000" rows="2"></textarea></label><label>Decision<select name="decision" required><option value="">Choose a decision</option><option value="approve">Approve and apply trade</option><option value="reject">Reject trade</option></select></label><button ${t.error?'disabled':''}>Confirm trade decision</button></form>`:''}</article>`;
     return `<div class="pc-card"><h3>Trade Approvals · ${pending.length} pending</h3><p data-review-refresh role="status">Approvals update automatically.</p><p>Review trades agreed by both teams. Approval applies the trade and keeps its backend history.</p><button type="button" data-command="trade-reviews">Refresh status</button></div>${t.error?`<p class="pc-notice" role="alert">${E(t.error)}</p>`:''}<h3>Pending approvals</h3>${pending.map(o=>card(o,true)).join('') || '<p>No trades are waiting for league approval.</p>'}<details class="pc-card"><summary>Recent trade history</summary>${t.offers.filter(o=>o.status!=='accepted_team').map(o=>card(o,false)).join('') || '<p>No trade history yet.</p>'}</details>`;
@@ -244,6 +246,25 @@
     if(changed){if(initial)shell(draftView(d));else root.querySelector('#pc-content').innerHTML=draftView(d);const select=root.querySelector('select[name="auction_id"]');if(select && selection && d.players.some(p=>String(p.id)===selection))select.value=selection;}
     tickDraft();
   }
+  function updateApprovalCount(count) {
+    if(!Number.isInteger(count) || count<0)return;
+    approvalCount=count;
+    const badge=root.querySelector('[data-approval-count]');
+    if(badge){badge.textContent=String(count);badge.title=count+' trades waiting for approval';}
+  }
+  async function refreshApprovalCount() {
+    if(!active || !token || !profile?.can_review_trades || checkingApprovalCount || document.hidden)return;
+    const auth=token;
+    checkingApprovalCount=true;
+    try {
+      const result=await call('trade-reviews?count=1');
+      if(active && auth===token && profile?.can_review_trades)updateApprovalCount(result.pending_count);
+    } catch(error) { /* Keep the last known count until the next successful check. */ }
+    finally {checkingApprovalCount=false;}
+  }
+  setInterval(refreshApprovalCount,15000);
+  window.addEventListener('focus',refreshApprovalCount);
+  document.addEventListener('visibilitychange',refreshApprovalCount);
   let checkingReviews=false;
   async function refreshTradeReviews() {
     if(!active || tab!=='trade-reviews' || !token || busy || checkingReviews || document.hidden)return;
@@ -258,7 +279,8 @@
       if(JSON.stringify(next)!==tradeReviewSignature) {
         const drafts=new Map([...root.querySelectorAll('form[data-action="trade-review"]')].map(f=>[f.elements.proposal_id.value,{note:f.elements.admin_note.value,decision:f.elements.decision.value}]));
         const historyOpen=root.querySelector('details')?.open;
-        root.innerHTML=tradeReviewView(next);
+        root.querySelector('#pc-content').innerHTML=tradeReviewView(next);
+        updateApprovalCount(approvalCount);
         root.querySelectorAll('form[data-action="trade-review"]').forEach(f=>{const draft=drafts.get(f.elements.proposal_id.value);if(draft){f.elements.admin_note.value=draft.note;f.elements.decision.value=draft.decision;}});
         if(historyOpen && root.querySelector('details'))root.querySelector('details').open=true;
         viewCache.delete('trade-reviews');
@@ -474,6 +496,7 @@
         profile=overlayAvailability(p);
         const content=selectedTab==='lines'?linesView(data):selectedTab==='trade-reviews'?tradeReviewView(data):selectedTab==='trades'?tradeView(data):selectedTab==='team'?teamView(data):profileView(profile);
         shell(content);
+        refreshApprovalCount();
         if(selectedTab==='lines')constrainLines();
         if(selectedTab==='profile' && profile.link){renderResults();loadResults(generation);}
         if(availabilityStatus)availabilityNotice(availabilityStatus,availabilityFailed);
