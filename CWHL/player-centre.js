@@ -197,11 +197,13 @@
     const packageText=(o,side)=>[...(o['players_from_'+side] || []),...(o['picks_from_'+side] || []).map(p=>p.label)].map(E).join(', ') || 'None';
     return `${t.offers.map(o=>`<article class="pc-card"><h3>${E(o.proposing_team)} ↔ ${E(o.receiving_team)}</h3><span class="pc-pill">${E(o.status_label)}</span><div class="pc-columns"><p><strong>${E(o.proposing_team)} sends</strong><br>${packageText(o,'proposer')}</p><p><strong>${E(o.receiving_team)} sends</strong><br>${packageText(o,'receiver')}</p></div>${o.salary_cap_enabled?`<p class="pc-muted">Salary after: ${E(o.proposing_team)} $${E(Number(o.proposer_after).toLocaleString())} · ${E(o.receiving_team)} $${E(Number(o.receiver_after).toLocaleString())} · Cap $${E(Number(o.salary_cap).toLocaleString())}</p>`:''}${o.note?`<p>${E(o.note)}</p>`:''}<p class="pc-muted">${E(o.next_action)}</p>${o.status==='pending_team'?`<form data-action="trade-decision">${hidden('proposal_id',o.id)}<label>Decision<select name="decision">${o.receiving_team===t.team?'<option value="accept">Accept offer</option><option value="decline">Decline offer</option>':'<option value="cancel">Cancel offer</option>'}</select></label><button>Confirm decision</button></form>`:''}</article>`).join('') || '<div class="pc-card">No trade offers for your team yet.</div>'}`;
   }
+  let tradeReviewSignature='';
   function tradeReviewView(t) {
+    tradeReviewSignature=JSON.stringify(t);
     const pending=t.offers.filter(o=>o.status==='accepted_team');
     const packageText=(o,side)=>[...(o['players_from_'+side] || []),...(o['picks_from_'+side] || []).map(p=>p.label)].map(E).join(', ') || 'None';
     const card=(o,review)=>`<article class="pc-card"><h3>${E(o.proposing_team)} ↔ ${E(o.receiving_team)}</h3><span class="pc-pill">${E(o.status_label)}</span><div class="pc-columns"><p><strong>${E(o.proposing_team)} sends</strong><br>${packageText(o,'proposer')}</p><p><strong>${E(o.receiving_team)} sends</strong><br>${packageText(o,'receiver')}</p></div>${o.salary_cap_enabled?`<p>Salary after: ${E(o.proposing_team)} $${E(Number(o.proposer_after).toLocaleString())} · ${E(o.receiving_team)} $${E(Number(o.receiver_after).toLocaleString())} · Cap $${E(Number(o.salary_cap).toLocaleString())}</p>`:''}${o.note?`<p>Offer note: ${E(o.note)}</p>`:''}<p class="pc-muted">${E(o.next_action)}</p>${o.reviewed_by?`<p>Reviewed by ${E(o.reviewed_by)} · ${E(o.reviewed_at)}</p>`:''}${o.admin_note?`<p>League note: ${E(o.admin_note)}</p>`:''}${review?`<form data-action="trade-review">${hidden('proposal_id',o.id)}<label>League note<textarea name="admin_note" maxlength="1000" rows="2"></textarea></label><label>Decision<select name="decision" required><option value="">Choose a decision</option><option value="approve">Approve and apply trade</option><option value="reject">Reject trade</option></select></label><button ${t.error?'disabled':''}>Confirm trade decision</button></form>`:''}</article>`;
-    return `<div class="pc-card"><h3>Trade Approvals · ${pending.length} pending</h3><p>Review trades agreed by both teams. Approval applies the trade and keeps its backend history.</p><button type="button" data-command="trade-reviews">Refresh status</button></div>${t.error?`<p class="pc-notice" role="alert">${E(t.error)}</p>`:''}<h3>Pending approvals</h3>${pending.map(o=>card(o,true)).join('') || '<p>No trades are waiting for league approval.</p>'}<details class="pc-card"><summary>Recent trade history</summary>${t.offers.filter(o=>o.status!=='accepted_team').map(o=>card(o,false)).join('') || '<p>No trade history yet.</p>'}</details>`;
+    return `<div class="pc-card"><h3>Trade Approvals · ${pending.length} pending</h3><p data-review-refresh role="status">Approvals update automatically.</p><p>Review trades agreed by both teams. Approval applies the trade and keeps its backend history.</p><button type="button" data-command="trade-reviews">Refresh status</button></div>${t.error?`<p class="pc-notice" role="alert">${E(t.error)}</p>`:''}<h3>Pending approvals</h3>${pending.map(o=>card(o,true)).join('') || '<p>No trades are waiting for league approval.</p>'}<details class="pc-card"><summary>Recent trade history</summary>${t.offers.filter(o=>o.status!=='accepted_team').map(o=>card(o,false)).join('') || '<p>No trade history yet.</p>'}</details>`;
   }
   let draftData=null, draftReceivedAt=0, draftServerTime=0, draftPolling=false, draftStale=false;
   function draftView(d) {
@@ -242,6 +244,37 @@
     if(changed){if(initial)shell(draftView(d));else root.querySelector('#pc-content').innerHTML=draftView(d);const select=root.querySelector('select[name="auction_id"]');if(select && selection && d.players.some(p=>String(p.id)===selection))select.value=selection;}
     tickDraft();
   }
+  let checkingReviews=false;
+  async function refreshTradeReviews() {
+    if(!active || tab!=='trade-reviews' || !token || busy || checkingReviews || document.hidden)return;
+    const generation=viewGeneration,auth=token;
+    checkingReviews=true;
+    try {
+      const next=await call('trade-reviews');
+      if(!active || tab!=='trade-reviews' || generation!==viewGeneration || auth!==token || busy)return;
+      if(next.error)throw new Error(next.error);
+      // Do not move a form beneath an admin's cursor while they review it.
+      if(root.querySelector('form[data-action="trade-review"]') && document.activeElement?.closest('form[data-action="trade-review"]'))return;
+      if(JSON.stringify(next)!==tradeReviewSignature) {
+        const drafts=new Map([...root.querySelectorAll('form[data-action="trade-review"]')].map(f=>[f.elements.proposal_id.value,{note:f.elements.admin_note.value,decision:f.elements.decision.value}]));
+        const historyOpen=root.querySelector('details')?.open;
+        root.innerHTML=tradeReviewView(next);
+        root.querySelectorAll('form[data-action="trade-review"]').forEach(f=>{const draft=drafts.get(f.elements.proposal_id.value);if(draft){f.elements.admin_note.value=draft.note;f.elements.decision.value=draft.decision;}});
+        if(historyOpen && root.querySelector('details'))root.querySelector('details').open=true;
+        viewCache.delete('trade-reviews');
+      }
+      const status=root.querySelector('[data-review-refresh]');
+      if(status)status.textContent='Approvals are up to date. Checking automatically.';
+    } catch(error) {
+      if(active && tab==='trade-reviews' && generation===viewGeneration) {
+        const status=root.querySelector('[data-review-refresh]');
+        if(status)status.textContent='Automatic update delayed. Retrying shortly; your review notes are preserved.';
+      }
+    } finally {checkingReviews=false;}
+  }
+  setInterval(refreshTradeReviews,15000);
+  window.addEventListener('focus',refreshTradeReviews);
+  document.addEventListener('visibilitychange',refreshTradeReviews);
   let checkingTrades=false;
   async function refreshTrades() {
     if(!active || tab!=='trades' || !token || busy || checkingTrades || document.hidden)return;
