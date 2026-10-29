@@ -368,7 +368,8 @@
     return p;
   }
   function chooseAvailability(game,status) {
-    const change={game_key:game.key,status,note:game.response.note || ''};
+    status=game.response.status===status?'none':status;
+    const change={game_key:game.key,status,note:status==='none'?'':game.response.note || ''};
     availabilityPending.set(game.key,change);
     game.response={status:change.status,note:change.note};
     editGeneration++;
@@ -438,7 +439,7 @@
       const game=profile.games.find(g=>g.key===response.dataset.game);
       if(!game)return;
       chooseAvailability(game,response.dataset.status);
-      response.closest('.pc-response-buttons').querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',button===response));
+      response.closest('.pc-response-buttons').querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',button.dataset.status===game.response.status));
       response.closest('.pc-fixture').querySelector('.pc-fixture-body small').textContent=labels[game.response.status];
       availabilityNotice('Saving in the background...');
       clearTimeout(availabilityTimer);
