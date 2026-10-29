@@ -93,3 +93,5 @@
 #player-centre .pc-draft-picker{padding:16px}
 #player-centre .pc-draft-picker select{max-width:100%;min-width:0}
 #player-centre .pc-tabs{flex-wrap:wrap}
+
+#player-centre .pc-lines-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0}#player-centre .pc-line-position{display:block;font-weight:800;color:var(--accent,#00bfd8);margin-bottom:8px}#player-centre .pc-lines-grid select{width:100%;min-height:48px} @media(max-width:600px){#player-centre .pc-lines-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
