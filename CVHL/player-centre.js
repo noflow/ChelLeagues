@@ -18,12 +18,16 @@
   let profile;
   const viewCache = new Map();
   let cacheEpoch = 0;
-  function clearViews() { viewCache.clear(); cacheEpoch++; }
+  function clearViews(keep=false) { if(keep){for(const entry of viewCache.values())entry.at=0;}else viewCache.clear(); cacheEpoch++; }
+  function cachedView(path) {
+    const entry=viewCache.get(path);
+    return entry && entry.token===token && Date.now()-entry.seen<120000 ? structuredClone(entry.value) : null;
+  }
   async function readView(path) {
     const entry=viewCache.get(path);
     if(entry && entry.token===token && Date.now()-entry.at<15000)return structuredClone(entry.value);
     const owner=token,epoch=cacheEpoch,value=await call(path);
-    if(token===owner && epoch===cacheEpoch && !value.error)viewCache.set(path,{token:owner,at:Date.now(),value:structuredClone(value)});
+    if(token===owner && epoch===cacheEpoch && !value.error)viewCache.set(path,{token:owner,at:Date.now(),seen:Date.now(),value:structuredClone(value)});
     return value;
   }
   let tab = 'profile';
@@ -37,6 +41,7 @@
   let publishedResults = [];
   let resultsState = 'Loading published results…';
   let viewGeneration = 0;
+  let editGeneration = 0;
   const root = document.createElement('section');
   root.id = 'player-centre';
   const page = document.createElement('div');
@@ -56,7 +61,7 @@
   function signedOut() { clearViews(); profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
   async function call(path, data) {
     const callToken=token;
-    if(data)clearViews();
+    if(data)clearViews(path==='action/availability');
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),15000);
     let response;
@@ -70,7 +75,7 @@
       if (response.status === 401 && token===callToken) { token=''; profile=null; sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey); }
       throw new Error(result.error || 'Please try again.');
     }
-    if(data)clearViews();
+    if(data)clearViews(path==='action/availability');
     return result;
   }
   async function signIn() {
@@ -294,19 +299,32 @@
     token = localStorage.getItem(storageKey) || '';
     const generation = ++viewGeneration;
     if (!token) { draftData=null;signedOut(); return; }
+    let preview=false;
+    const edits=editGeneration;
     try {
-      message('Loading your player area…');
       const selectedTab=tab;
       const path=selectedTab==='lines'?'lines?team='+encodeURIComponent(team || linesTeam):selectedTab==='team'?'team'+(team?'?team='+encodeURIComponent(team):''):selectedTab;
+      const render=(p,data)=>{
+        profile=overlayAvailability(p);
+        const content=selectedTab==='lines'?linesView(data):selectedTab==='trade-reviews'?tradeReviewView(data):selectedTab==='trades'?tradeView(data):selectedTab==='team'?teamView(data):profileView(profile);
+        shell(content);
+        if(selectedTab==='lines')constrainLines();
+        if(selectedTab==='profile' && profile.link){renderResults();loadResults(generation);}
+        if(availabilityStatus)availabilityNotice(availabilityStatus,availabilityFailed);
+      };
+      const previousProfile=cachedView('profile'),previousData=selectedTab==='profile'?null:cachedView(path);
+      if(selectedTab!=='draft' && previousProfile && (selectedTab==='profile' || previousData)){
+        render(previousProfile,previousData);preview=true;
+      }else message('Loading your player area…');
       const [nextProfile, data]=await Promise.all([readView('profile'),selectedTab==='profile'?Promise.resolve(null):selectedTab==='draft'?call('draft'):readView(path)]);
       if(!active || generation!==viewGeneration)return;
-      profile=nextProfile;
-      if(selectedTab==='draft'){receiveDraft(data,true);return;}
-      const content=selectedTab==='lines'?linesView(data):selectedTab==='trade-reviews'?tradeReviewView(data):selectedTab==='trades'?tradeView(data):selectedTab==='team'?teamView(data):profileView(profile);
-      if (active && generation===viewGeneration) { shell(content); if(tab==='lines')constrainLines(); if(tab==='profile' && profile.link) {renderResults(); loadResults(generation);} }
+      if(selectedTab==='draft'){profile=nextProfile;receiveDraft(data,true);return;}
+      // Never replace a form the user started editing while fresh data was loading.
+      if(!preview || edits===editGeneration)render(nextProfile,data);
     } catch(error) {
       if (generation!==viewGeneration) return;
       if (!token) { notice=error.message; signedOut(); }
+      else if(preview)availabilityNotice('Showing recent data. Refresh was delayed: '+error.message);
       else message(error.message,true);
     }
   }
@@ -331,17 +349,33 @@
   }
   const links = [...document.querySelectorAll('a.player-centre-nav, #player-signup-link')];
   links.forEach(link=>{link.href='#profile';link.addEventListener('click',event=>{event.preventDefault();if(location.hash==='#profile')open();else location.hash='profile';});});
+  root.addEventListener('input',()=>{editGeneration++;});
   root.addEventListener('change',event=>{
+    editGeneration++;
     if(event.target.matches('[data-line-position]')){constrainLines();return;}
     if(event.target.matches('[data-trade-team]')) {root.querySelector('#pc-trade-receiver').innerHTML=tradeChoices(event.target.value,'receiver');return;}
-    if(availabilityPending.size || availabilitySaving){event.target.value=scheduleWeek;return;}
     const kind=event.target.dataset.week;
-    if(kind==='schedule') {scheduleWeek=event.target.value;shell(profileView(profile));renderResults();}
+    if(kind==='schedule') {scheduleWeek=event.target.value;shell(profileView(profile));renderResults();if(availabilityStatus)availabilityNotice(availabilityStatus,availabilityFailed);}
     if(kind==='results') {resultsWeek=event.target.value;renderResults();}
   });
-  const availabilityPending=new Map();
+  const availabilityPending=new Map(),availabilityInFlight=new Map();
+  let availabilityStatus='',availabilityFailed=false;
+  function overlayAvailability(p) {
+    for(const change of [...availabilityInFlight.values(),...availabilityPending.values()]){
+      const game=p?.games?.find(g=>g.key===change.game_key);
+      if(game)game.response={status:change.status,note:change.note};
+    }
+    return p;
+  }
+  function chooseAvailability(game,status) {
+    const change={game_key:game.key,status,note:game.response.note || ''};
+    availabilityPending.set(game.key,change);
+    game.response={status:change.status,note:change.note};
+    editGeneration++;
+  }
   let availabilityTimer,availabilitySaving=false;
   function availabilityNotice(text,retry=false) {
+    availabilityStatus=text;availabilityFailed=retry;
     let node=root.querySelector('#pc-availability-save');
     if(!node){node=document.createElement('div');node.id='pc-availability-save';node.className='pc-notice';node.setAttribute('role','status');root.querySelector('#pc-content').prepend(node);}
     node.textContent=text;
@@ -350,31 +384,38 @@
   async function saveAvailability() {
     if(availabilitySaving || !availabilityPending.size)return;
     clearTimeout(availabilityTimer);
-    availabilitySaving=true;busy=true;
+    availabilitySaving=true;
     const savingToken=token;
     const batch=[...availabilityPending.values()];availabilityPending.clear();
+    for(const change of batch)availabilityInFlight.set(change.game_key,change);
     availabilityNotice('Saving availability...');
     try {
       await call('action/availability',{changes:JSON.stringify(batch)});
-      if(token!==savingToken){availabilityPending.clear();availabilitySaving=false;busy=false;return;}
-      for(const change of batch){const game=profile?.games.find(g=>g.key===change.game_key);if(game)game.response={status:change.status,note:change.note};}
+      if(token!==savingToken){availabilityPending.clear();availabilityInFlight.clear();availabilitySaving=false;return;}
+      for(const change of batch){const game=profile?.games.find(g=>g.key===change.game_key);if(game && !availabilityPending.has(change.game_key))game.response={status:change.status,note:change.note};}
+      const cachedProfile=viewCache.get('profile');
+      if(cachedProfile && cachedProfile.token===savingToken){
+        for(const change of batch){const game=cachedProfile.value.games?.find(g=>g.key===change.game_key);if(game)game.response={status:change.status,note:change.note};}
+      }
+      editGeneration++;
+      availabilityInFlight.clear();
       availabilityNotice(availabilityPending.size?'Saving your next selections...':'All availability changes saved.');
     } catch(error) {
-      if(token!==savingToken){availabilityPending.clear();availabilitySaving=false;busy=false;return;}
+      if(token!==savingToken){availabilityPending.clear();availabilityInFlight.clear();availabilitySaving=false;return;}
       for(const change of batch)if(!availabilityPending.has(change.game_key))availabilityPending.set(change.game_key,change);
       clearTimeout(availabilityTimer);
       availabilityNotice('Not confirmed saved: '+error.message,true);
-      availabilitySaving=false;busy=false;
+      availabilityInFlight.clear();availabilitySaving=false;
       return;
     }
     availabilitySaving=false;
-    busy=availabilityPending.size>0;
-    if(busy)availabilityTimer=setTimeout(saveAvailability,200);
+    if(availabilityPending.size)availabilityTimer=setTimeout(saveAvailability,200);
   }
   window.addEventListener('beforeunload',event=>{if(availabilityPending.size || availabilitySaving){event.preventDefault();event.returnValue='';}});
   root.addEventListener('click',async event=>{
     const copy=event.target.closest('[data-copy-line]');
     if(copy && !busy){
+      editGeneration++;
       const source=copy.closest('form'),forms=[...root.querySelectorAll('form[data-line-game]')];
       const choice=source.querySelector('[data-copy-target]').value;
       const targets=forms.filter((f,index)=>f!==source && f.dataset.lineDate===source.dataset.lineDate && (choice==='remaining'?index>forms.indexOf(source):f.dataset.lineGame===choice));
@@ -393,29 +434,29 @@
     }
 
     const response=event.target.closest('[data-game]');
-    if(response && (!busy || availabilityPending.size || availabilitySaving)) {
+    if(response && !busy) {
       const game=profile.games.find(g=>g.key===response.dataset.game);
       if(!game)return;
-      availabilityPending.set(game.key,{game_key:game.key,status:response.dataset.status,note:game.response.note || ''});
-      busy=true;
+      chooseAvailability(game,response.dataset.status);
       response.closest('.pc-response-buttons').querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',button===response));
-      availabilityNotice('Changes queued. Keep selecting games; saving automatically...');
+      response.closest('.pc-fixture').querySelector('.pc-fixture-body small').textContent=labels[game.response.status];
+      availabilityNotice('Saving in the background...');
       clearTimeout(availabilityTimer);
       availabilityTimer=setTimeout(saveAvailability,1200);
       return;
     }
-    if(event.target.closest('[data-discard-availability]') && !availabilitySaving){availabilityPending.clear();clearTimeout(availabilityTimer);busy=false;notice='Pending changes discarded. Reloading saved responses.';await load();return;}
+    if(event.target.closest('[data-discard-availability]') && !availabilitySaving){availabilityPending.clear();clearTimeout(availabilityTimer);availabilityStatus='';clearViews();notice='Pending changes discarded. Reloading saved responses.';await load();return;}
     if(event.target.closest('[data-retry-availability]')){saveAvailability();return;}
     const command=event.target.closest('[data-command]')?.dataset.command;
     if (!command || busy) return;
-    if(availabilityPending.size && command!=='logout'){availabilityNotice('Save your pending availability before switching tabs.',true);return;}
     if (command==='login') {try {await signIn();} catch {message('Sign-in could not start. Please enable website storage and try again.',true);}return;}
-    if (command==='logout') {availabilityPending.clear();clearTimeout(availabilityTimer);++viewGeneration;draftData=null;try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
+    if (command==='logout' && (availabilityPending.size || availabilitySaving)){availabilityNotice('Wait for availability to save, or discard pending changes before signing out.',!availabilitySaving);return;}
+    if (command==='logout') {availabilityStatus='';availabilityPending.clear();clearTimeout(availabilityTimer);++viewGeneration;draftData=null;try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
     tab=command;notice='';await load();
   });
   root.addEventListener('submit',async event=>{
     event.preventDefault();if(busy)return;
-    if(availabilityPending.size){availabilityNotice('Save or discard pending availability first.',true);return;}
+    if(availabilityPending.size || availabilitySaving){availabilityNotice('Availability is still saving. Try this action once it finishes.',availabilityFailed);return;}
     const form=event.target;
     if(form.hasAttribute('data-team-selector')) {pairingCode='';await load(new FormData(form).get('team'));return;}
     busy=true;
@@ -426,7 +467,7 @@
   });
   window.addEventListener('storage',event=>{
     if(event.key!==storageKey && event.key!==null)return;
-    availabilityPending.clear();clearTimeout(availabilityTimer);
+    availabilityPending.clear();availabilityInFlight.clear();availabilityStatus='';clearTimeout(availabilityTimer);
     token=localStorage.getItem(storageKey) || '';profile=null;
     if(active)load();
   });
