@@ -334,10 +334,44 @@
   root.addEventListener('change',event=>{
     if(event.target.matches('[data-line-position]')){constrainLines();return;}
     if(event.target.matches('[data-trade-team]')) {root.querySelector('#pc-trade-receiver').innerHTML=tradeChoices(event.target.value,'receiver');return;}
+    if(availabilityPending.size || availabilitySaving){event.target.value=scheduleWeek;return;}
     const kind=event.target.dataset.week;
     if(kind==='schedule') {scheduleWeek=event.target.value;shell(profileView(profile));renderResults();}
     if(kind==='results') {resultsWeek=event.target.value;renderResults();}
   });
+  const availabilityPending=new Map();
+  let availabilityTimer,availabilitySaving=false;
+  function availabilityNotice(text,retry=false) {
+    let node=root.querySelector('#pc-availability-save');
+    if(!node){node=document.createElement('div');node.id='pc-availability-save';node.className='pc-notice';node.setAttribute('role','status');root.querySelector('#pc-content').prepend(node);}
+    node.textContent=text;
+    if(retry){const button=document.createElement('button');button.type='button';button.dataset.retryAvailability='true';button.textContent='Retry saving';node.append(' ',button);const discard=document.createElement('button');discard.type='button';discard.dataset.discardAvailability='true';discard.textContent='Discard pending changes';node.append(' ',discard);}
+  }
+  async function saveAvailability() {
+    if(availabilitySaving || !availabilityPending.size)return;
+    clearTimeout(availabilityTimer);
+    availabilitySaving=true;busy=true;
+    const savingToken=token;
+    const batch=[...availabilityPending.values()];availabilityPending.clear();
+    availabilityNotice('Saving availability...');
+    try {
+      await call('action/availability',{changes:JSON.stringify(batch)});
+      if(token!==savingToken){availabilityPending.clear();availabilitySaving=false;busy=false;return;}
+      for(const change of batch){const game=profile?.games.find(g=>g.key===change.game_key);if(game)game.response={status:change.status,note:change.note};}
+      availabilityNotice(availabilityPending.size?'Saving your next selections...':'All availability changes saved.');
+    } catch(error) {
+      if(token!==savingToken){availabilityPending.clear();availabilitySaving=false;busy=false;return;}
+      for(const change of batch)if(!availabilityPending.has(change.game_key))availabilityPending.set(change.game_key,change);
+      clearTimeout(availabilityTimer);
+      availabilityNotice('Not confirmed saved: '+error.message,true);
+      availabilitySaving=false;busy=false;
+      return;
+    }
+    availabilitySaving=false;
+    busy=availabilityPending.size>0;
+    if(busy)availabilityTimer=setTimeout(saveAvailability,200);
+  }
+  window.addEventListener('beforeunload',event=>{if(availabilityPending.size || availabilitySaving){event.preventDefault();event.returnValue='';}});
   root.addEventListener('click',async event=>{
     const copy=event.target.closest('[data-copy-line]');
     if(copy && !busy){
@@ -359,29 +393,29 @@
     }
 
     const response=event.target.closest('[data-game]');
-    if(response && !busy) {
+    if(response && (!busy || availabilityPending.size || availabilitySaving)) {
       const game=profile.games.find(g=>g.key===response.dataset.game);
       if(!game)return;
+      availabilityPending.set(game.key,{game_key:game.key,status:response.dataset.status,note:game.response.note || ''});
       busy=true;
-      root.querySelectorAll('[data-game]').forEach(b=>b.disabled=true);
-      response.textContent='Saving...';
-      response.setAttribute('aria-busy','true');
-      try {
-        await call('action/availability',{game_key:game.key,status:response.dataset.status,note:game.response.note || ''});
-        game.response.status=response.dataset.status;notice='Availability saved.';
-        shell(profileView(profile));renderResults();
-      } catch(error) {notice=error.message;await load();}
-      finally {busy=false;root.querySelectorAll('[data-game]').forEach(b=>b.disabled=false);}
+      response.closest('.pc-response-buttons').querySelectorAll('button').forEach(button=>button.setAttribute('aria-pressed',button===response));
+      availabilityNotice('Changes queued. Keep selecting games; saving automatically...');
+      clearTimeout(availabilityTimer);
+      availabilityTimer=setTimeout(saveAvailability,1200);
       return;
     }
+    if(event.target.closest('[data-discard-availability]') && !availabilitySaving){availabilityPending.clear();clearTimeout(availabilityTimer);busy=false;notice='Pending changes discarded. Reloading saved responses.';await load();return;}
+    if(event.target.closest('[data-retry-availability]')){saveAvailability();return;}
     const command=event.target.closest('[data-command]')?.dataset.command;
     if (!command || busy) return;
+    if(availabilityPending.size && command!=='logout'){availabilityNotice('Save your pending availability before switching tabs.',true);return;}
     if (command==='login') {try {await signIn();} catch {message('Sign-in could not start. Please enable website storage and try again.',true);}return;}
-    if (command==='logout') {++viewGeneration;draftData=null;try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
+    if (command==='logout') {availabilityPending.clear();clearTimeout(availabilityTimer);++viewGeneration;draftData=null;try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
     tab=command;notice='';await load();
   });
   root.addEventListener('submit',async event=>{
     event.preventDefault();if(busy)return;
+    if(availabilityPending.size){availabilityNotice('Save or discard pending availability first.',true);return;}
     const form=event.target;
     if(form.hasAttribute('data-team-selector')) {pairingCode='';await load(new FormData(form).get('team'));return;}
     busy=true;
@@ -392,6 +426,7 @@
   });
   window.addEventListener('storage',event=>{
     if(event.key!==storageKey && event.key!==null)return;
+    availabilityPending.clear();clearTimeout(availabilityTimer);
     token=localStorage.getItem(storageKey) || '';profile=null;
     if(active)load();
   });
