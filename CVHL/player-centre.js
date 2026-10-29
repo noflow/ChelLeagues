@@ -364,7 +364,7 @@
       if(!game)return;
       busy=true;
       root.querySelectorAll('[data-game]').forEach(b=>b.disabled=true);
-      response.textContent='Saving…';
+      response.textContent='Saving...';
       response.setAttribute('aria-busy','true');
       try {
         await call('action/availability',{game_key:game.key,status:response.dataset.status,note:game.response.note || ''});
