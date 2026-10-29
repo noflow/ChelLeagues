@@ -57,3 +57,17 @@ test('nightly controls group dates and copy destinations stay within the same ni
 
 test('each night has game tabs, one visible panel and a readable date',()=>{const game=(key)=>({key,date:'2026-11-04',time:'9 PM',home:'BUF',away:'TOR',eligible:{},line:null});const html=render({team:'BUF',games:[game('one'),game('two'),game('three')]});for(const n of [1,2,3])assert.ok(html.includes('>Game '+n+'</button>'));assert.equal((html.match(/role="tabpanel"/g)||[]).length,3);assert.equal((html.match(/aria-labelledby="line-tab-[^"]+" hidden/g)||[]).length,2);assert.ok(html.includes('Nov 4, 2026'));assert.ok(!html.includes('Save Night'));});
 test('posting validation lists each incomplete game and its positions',()=>{const ctx=vm.createContext({entries:[{time:'9 PM',slots:{LW:'a',C:'b',RW:'c',LD:'d',RD:'e',G:'f'}},{time:'10 PM',slots:{LW:'a'}},{slots:{}}]});vm.runInContext(helpers+';issues=incompleteLineups(entries)',ctx);assert.equal(ctx.issues.length,2);assert.ok(ctx.issues[0].includes('Game 2 (10 PM): missing C, RW, LD, RD, G'));assert.ok(ctx.issues[1].includes('Game 3'));});
+
+ test('delivery polling updates only the matching queued revision without replacing forms',async()=>{
+ const button={textContent:''},help={},badge={},control={disabled:true};
+ const form={elements:{night_revision:{value:'2'}},querySelector:s=>s==='.pc-muted'?help:button};
+ const section={dataset:{lineNight:'2026-11-04',deliveryPending:'true'},querySelector:()=>form,querySelectorAll:s=>s==='button,select'?[control]:[badge]};
+ const panel={dataset:{connectionState:'null'}};
+ const ctx=vm.createContext({active:true,tab:'lines',token:'token',busy:false,document:{hidden:false},viewGeneration:1,
+ root:{querySelector:()=>panel,querySelectorAll:()=>[section]},call:async()=>({nights:{'2026-11-04':{status:'posted',revision:1}}}),nightSaveNotice:()=>{},constrainLines:()=>{}});
+ vm.runInContext(src.slice(src.indexOf('  let checkingConnection'),src.indexOf('  setInterval(refreshConnection')),ctx);
+ await vm.runInContext('refreshConnection()',ctx);assert.equal(control.disabled,true);
+ ctx.call=async()=>({nights:{'2026-11-04':{status:'posted',revision:2}}});
+ await vm.runInContext('refreshConnection()',ctx);
+ assert.equal(button.textContent,'Update Lines');assert.equal(control.disabled,false);assert.equal(section.dataset.deliveryPending,'false');assert.equal(badge.textContent,'Posted to Discord');
+ });

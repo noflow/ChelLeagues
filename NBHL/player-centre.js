@@ -279,7 +279,7 @@
     return `<div class="pc-card"><h3>${E(t.team)} · Team Lines</h3><p>Lineups save automatically. Use the game tabs to set each line, then post the whole night.</p><button type="button" data-command="lines">Refresh status</button><p id="pc-lines-notice" role="status"></p></div><div id="pc-team-connection" data-connection-state="${E(JSON.stringify(t.server || null))}">${connectionView(t)}</div>${days.map(day=>{
       const games=t.games.filter(g=>g.date===day),night=t.nights?.[day],queued=night?.status==='queued';
       const selected=games.some(g=>g.key===lineTabs.get(day))?lineTabs.get(day):games[0].key;
-      return `<section class="pc-card pc-line-night" data-line-night="${E(day)}"><div class="pc-game-tabs" role="tablist" aria-label="Games for ${E(lineNightDate(day))}">${games.map((g,index)=>`<button type="button" role="tab" data-line-tab="${E(g.key)}" id="line-tab-${E(g.key)}" aria-controls="line-panel-${E(g.key)}" aria-selected="${g.key===selected}">Game ${index+1}</button>`).join('')}</div>${games.map((g,index)=>{
+      return `<section class="pc-card pc-line-night" data-line-night="${E(day)}" data-delivery-pending="${queued}"><div class="pc-game-tabs" role="tablist" aria-label="Games for ${E(lineNightDate(day))}">${games.map((g,index)=>`<button type="button" role="tab" data-line-tab="${E(g.key)}" id="line-tab-${E(g.key)}" aria-controls="line-panel-${E(g.key)}" aria-selected="${g.key===selected}">Game ${index+1}</button>`).join('')}</div>${games.map((g,index)=>{
         const line=g.line,slots=line?.slots || {},eligible=g.eligible,locked=queued || ['queued','night-queued'].includes(line?.status);
         const invalid=Object.values(slots).some(k=>k && !Object.hasOwn(eligible,k));
         return `<article data-line-panel="${E(g.key)}" id="line-panel-${E(g.key)}" role="tabpanel" aria-labelledby="line-tab-${E(g.key)}" ${g.key===selected?'':'hidden'}><div class="pc-line-game-head"><div><h3>${E(g.time)} · ${E(g.away)} @ ${E(g.home)}</h3><p class="pc-muted">${E(g.timezone)} · Server: ${E(g.server || 'Not selected')}</p></div><time datetime="${E(day)}">${E(lineNightDate(day))}</time></div><span class="pc-pill" data-line-status>${E(statuses[line?.status] || 'Not set')}</span><p>Game code: <strong>${E(g.game_code || 'Not set in schedule')}</strong></p>${invalid?'<p class="pc-notice" role="alert">A selected player is no longer Available. Choose a replacement.</p>':''}<form data-action="lines" data-line-game="${E(g.key)}" data-line-date="${E(day)}" data-game-time="${E(g.time)}">${hidden('team',t.team)}${hidden('game',g.key)}${hidden('revision',line?.revision || 0)}<div class="pc-lines-grid">${linePositions.map(pos=>`<label><span class="pc-line-position" data-position="${pos}">${pos}</span><select name="${pos}" data-line-position aria-label="Game ${index+1} ${pos}" ${locked?'disabled':''}><option value="">Choose available player</option>${Object.entries(eligible).map(([key,name])=>`<option value="${E(key)}" ${slots[pos]===key?'selected':''}>${E(name)} · Available</option>`).join('')}</select></label>`).join('')}</div>${games.length>1?`<div class="pc-actions"><label>Copy this line to<select data-copy-target ${locked?'disabled':''}><option value="remaining">All remaining games this night</option>${games.filter(other=>other.key!==g.key).map(other=>`<option value="${E(other.key)}">Game ${games.indexOf(other)+1} · ${E(other.time)} · ${E(other.away)} @ ${E(other.home)}</option>`).join('')}</select></label><button type="button" data-copy-line ${locked?'disabled':''}>Copy Line</button></div>`:''}<p data-copy-warning role="status"></p></form></article>`;
@@ -295,6 +295,18 @@
       const state=await call('team-server');
       const panel=root.querySelector('#pc-team-connection');
       if(active && tab==='lines' && generation===viewGeneration && panel) {
+        root.querySelectorAll('[data-delivery-pending="true"]').forEach(section=>{
+          const night=state.nights?.[section.dataset.lineNight];
+          const form=section.querySelector('[data-night-action]');
+          if(!night || night.status!=='posted' || String(night.revision)!==form.elements.night_revision.value)return;
+          section.dataset.deliveryPending='false';
+          section.querySelectorAll('button,select').forEach(control=>control.disabled=false);
+          form.querySelector('[value="post-night"]').textContent='Update Lines';
+          form.querySelector('.pc-muted').textContent='Updates the existing Discord post. Each game needs all six positions filled.';
+          section.querySelectorAll('[data-line-status]').forEach(node=>node.textContent='Posted to Discord');
+          nightSaveNotice(section,'Posted to Discord. Changes save automatically; use Update Lines to update the same post.');
+          constrainLines();
+        });
         const signature=JSON.stringify(state.server || null);
         if(panel.dataset.connectionState!==signature){panel.innerHTML=connectionView(state);panel.dataset.connectionState=signature;}
       }
@@ -377,8 +389,8 @@
       const result=await call('lines',values);
       form.elements.night_revision.value=result.night_revision;
       for(const entry of entries)entry.form.elements.revision.value=result.revisions[entry.key];
-      lineSaves.delete(day);posted=true;editGeneration++;
-      nightSaveNotice(section,'Nightly lines queued for Discord. Use Refresh status to check delivery.');
+      lineSaves.delete(day);posted=true;editGeneration++;section.dataset.deliveryPending='true';
+      nightSaveNotice(section,'Nightly lines queued for Discord. Delivery status updates automatically.');
       section.querySelectorAll('[data-line-status]').forEach(node=>node.textContent='Queued for Discord');
     } catch(error){nightSaveNotice(section,'Lines not posted.',error.message);}
     finally{busy=false;if(!posted)controls.forEach(control=>control.disabled=false);}
