@@ -191,8 +191,11 @@
   }
   function tradeView(t) {
     tradeData=t;
+    return `<div class="pc-card"><h3>Team trades · ${E(t.team)}</h3><p class="pc-muted">Both teams agree first. League administration approves before players or picks move.</p><button type="button" data-command="trades">Refresh status</button></div>${t.error?`<p class="pc-notice" role="alert">${E(t.error)}</p>`:''}<details class="pc-card" open><summary>Propose a trade</summary><form data-action="trade-propose"><div class="pc-columns"><section><h3>Your team sends</h3>${tradeChoices(t.team,'proposer')}</section><section><label>Trade with<select name="receiving_team" data-trade-team required><option value="">Choose a team</option>${t.teams.filter(v=>v.abbr!==t.team).map(v=>option(v.abbr,v.name || v.abbr,'')).join('')}</select></label><h3>You receive</h3><div id="pc-trade-receiver">${tradeChoices('','receiver')}</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="pc-muted">Select at least one asset from each team. Rosters, salary limits, and pick ownership are checked when you send or accept an offer.</p><button>Send trade offer</button></form></details><p class="pc-muted" data-trade-refresh role="status">Offers update automatically.</p><div id="pc-trade-history"><h3>Offers & history</h3>${tradeHistory(t)}</div>`;
+  }
+  function tradeHistory(t) {
     const packageText=(o,side)=>[...(o['players_from_'+side] || []),...(o['picks_from_'+side] || []).map(p=>p.label)].map(E).join(', ') || 'None';
-    return `<div class="pc-card"><h3>Team trades · ${E(t.team)}</h3><p class="pc-muted">Both teams agree first. League administration approves before players or picks move.</p><button type="button" data-command="trades">Refresh status</button></div>${t.error?`<p class="pc-notice" role="alert">${E(t.error)}</p>`:''}<details class="pc-card" open><summary>Propose a trade</summary><form data-action="trade-propose"><div class="pc-columns"><section><h3>Your team sends</h3>${tradeChoices(t.team,'proposer')}</section><section><label>Trade with<select name="receiving_team" data-trade-team required><option value="">Choose a team</option>${t.teams.filter(v=>v.abbr!==t.team).map(v=>option(v.abbr,v.name || v.abbr,'')).join('')}</select></label><h3>You receive</h3><div id="pc-trade-receiver">${tradeChoices('','receiver')}</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="pc-muted">Select at least one asset from each team. Rosters, salary limits, and pick ownership are checked when you send or accept an offer.</p><button>Send trade offer</button></form></details><h3>Offers & history</h3>${t.offers.map(o=>`<article class="pc-card"><h3>${E(o.proposing_team)} ↔ ${E(o.receiving_team)}</h3><span class="pc-pill">${E(o.status_label)}</span><div class="pc-columns"><p><strong>${E(o.proposing_team)} sends</strong><br>${packageText(o,'proposer')}</p><p><strong>${E(o.receiving_team)} sends</strong><br>${packageText(o,'receiver')}</p></div>${o.salary_cap_enabled?`<p class="pc-muted">Salary after: ${E(o.proposing_team)} $${E(Number(o.proposer_after).toLocaleString())} · ${E(o.receiving_team)} $${E(Number(o.receiver_after).toLocaleString())} · Cap $${E(Number(o.salary_cap).toLocaleString())}</p>`:''}${o.note?`<p>${E(o.note)}</p>`:''}<p class="pc-muted">${E(o.next_action)}</p>${o.status==='pending_team'?`<form data-action="trade-decision">${hidden('proposal_id',o.id)}<label>Decision<select name="decision">${o.receiving_team===t.team?'<option value="accept">Accept offer</option><option value="decline">Decline offer</option>':'<option value="cancel">Cancel offer</option>'}</select></label><button>Confirm decision</button></form>`:''}</article>`).join('') || '<div class="pc-card">No trade offers for your team yet.</div>'}`;
+    return `${t.offers.map(o=>`<article class="pc-card"><h3>${E(o.proposing_team)} ↔ ${E(o.receiving_team)}</h3><span class="pc-pill">${E(o.status_label)}</span><div class="pc-columns"><p><strong>${E(o.proposing_team)} sends</strong><br>${packageText(o,'proposer')}</p><p><strong>${E(o.receiving_team)} sends</strong><br>${packageText(o,'receiver')}</p></div>${o.salary_cap_enabled?`<p class="pc-muted">Salary after: ${E(o.proposing_team)} $${E(Number(o.proposer_after).toLocaleString())} · ${E(o.receiving_team)} $${E(Number(o.receiver_after).toLocaleString())} · Cap $${E(Number(o.salary_cap).toLocaleString())}</p>`:''}${o.note?`<p>${E(o.note)}</p>`:''}<p class="pc-muted">${E(o.next_action)}</p>${o.status==='pending_team'?`<form data-action="trade-decision">${hidden('proposal_id',o.id)}<label>Decision<select name="decision">${o.receiving_team===t.team?'<option value="accept">Accept offer</option><option value="decline">Decline offer</option>':'<option value="cancel">Cancel offer</option>'}</select></label><button>Confirm decision</button></form>`:''}</article>`).join('') || '<div class="pc-card">No trade offers for your team yet.</div>'}`;
   }
   function tradeReviewView(t) {
     const pending=t.offers.filter(o=>o.status==='accepted_team');
@@ -239,6 +242,35 @@
     if(changed){if(initial)shell(draftView(d));else root.querySelector('#pc-content').innerHTML=draftView(d);const select=root.querySelector('select[name="auction_id"]');if(select && selection && d.players.some(p=>String(p.id)===selection))select.value=selection;}
     tickDraft();
   }
+  let checkingTrades=false;
+  async function refreshTrades() {
+    if(!active || tab!=='trades' || !token || busy || checkingTrades || document.hidden)return;
+    const generation=viewGeneration,auth=token;
+    checkingTrades=true;
+    try {
+      const next=await call('trades');
+      if(!active || tab!=='trades' || generation!==viewGeneration || auth!==token || busy)return;
+      const history=root.querySelector('#pc-trade-history');
+      if(!history || history.contains(document.activeElement))return;
+      if(next.error)throw new Error(next.error);
+      if(JSON.stringify(next.offers)!==JSON.stringify(tradeData.offers)) {
+        const decisions=new Map([...history.querySelectorAll('form')].map(f=>[f.elements.proposal_id.value,f.elements.decision.value]));
+        history.innerHTML='<h3>Offers & history</h3>'+tradeHistory(next);
+        history.querySelectorAll('form').forEach(f=>{const value=decisions.get(f.elements.proposal_id.value);if([...f.elements.decision.options].some(o=>o.value===value))f.elements.decision.value=value;});
+        tradeData.offers=next.offers;
+        viewCache.delete('trades');
+      }
+      root.querySelector('[data-trade-refresh]').textContent='Offers are up to date. Checking automatically.';
+    } catch(error) {
+      if(active && tab==='trades' && generation===viewGeneration) {
+        const status=root.querySelector('[data-trade-refresh]');
+        if(status)status.textContent='Automatic update delayed. Retrying shortly; your draft is preserved.';
+      }
+    } finally {checkingTrades=false;}
+  }
+  setInterval(refreshTrades,15000);
+  window.addEventListener('focus',refreshTrades);
+  document.addEventListener('visibilitychange',refreshTrades);
   async function refreshDraft() {
     if(!active || tab!=='draft' || !token || document.hidden || busy || draftPolling)return;
     const generation=viewGeneration, sessionToken=token;
