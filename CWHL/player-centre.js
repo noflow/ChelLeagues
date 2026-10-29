@@ -237,15 +237,22 @@
     return league==='continental-virtual-hockey-league' ? (t.server?.healthy ? '' : `<details class="pc-card" ${t.server?.guild?'open':''}><summary>Team Discord connection</summary><p>${t.server?.guild ? 'The Discord connection needs attention. Check that Statbot is online and can access the selected channel, or reconnect below.' : 'Connect Statbot to your team server to post lineups.'}</p><p>Invite Statbot to the team server, then generate a code here. A server manager runs /team-setup with that code and selects the lineup channel. Codes expire after 10 minutes. Generating a new code disconnects the previous connection.</p>${pairingCode?`<p class="pc-notice">Connection code: <code style="overflow-wrap:anywhere">${E(pairingCode)}</code></p>`:''}<form data-action="team-server">${hidden('team',t.team)}<button name="intent" value="connect">Generate connection code</button> <button name="intent" value="disconnect">Disconnect team server</button></form></details>`) : '<p class="pc-muted">Discord team-server posting is currently supported by CVHL Statbot.</p>';
   }
   const linePositions=['LW','C','RW','LD','RD','G'];
+  function copyLineSlots(slots,eligible) {
+    const copied={},missing=[];
+    for(const pos of linePositions){const key=slots[pos] || '';copied[pos]=Object.hasOwn(eligible,key)?key:'';if(key && !copied[pos])missing.push(pos);}
+    return {slots:copied,missing};
+  }
   function linesView(t) {
     linesTeam=t.team;
-
-    const connection=connectionView(t);
-    const statuses={draft:'Draft',queued:'Queued for Discord — refresh for delivery status',posted:'Posted to Discord','needs-review':'Needs review — check availability or the Discord message before reposting'};
-    return `<div class="pc-card"><h3>${E(t.team)} · Team Lines</h3><p>Choose six players marked Available for each game. Game codes come from the schedule.</p><button type="button" data-command="lines">Refresh status</button></div><div id="pc-team-connection" data-connection-state="${E(JSON.stringify(t.server || null))}">${connection}</div>${t.games.map(g=>{
-      const line=g.line, slots=line?.slots || {}, eligible=g.eligible;
-      const invalid=Object.values(slots).some(k=>k && !Object.hasOwn(eligible,k));
-      return `<article class="pc-card"><h3>${E(g.time)} · ${E(g.away)} @ ${E(g.home)}</h3><p class="pc-muted">${E(g.date)} · ${E(g.timezone)} · Server: ${E(g.server || 'Not selected')}</p><span class="pc-pill">${E(statuses[line?.status] || 'Not set')}</span><p>Game code: <strong>${E(g.game_code || 'Not set in schedule')}</strong></p>${invalid?'<p class="pc-notice" role="alert">A selected player is no longer Available. Choose a replacement before posting.</p>':''}<form data-action="lines">${hidden('team',t.team)}${hidden('game',g.key)}${hidden('revision',line?.revision || 0)}<div class="pc-lines-grid">${linePositions.map(pos=>`<label><span class="pc-line-position" data-position="${pos}">${pos}</span><select name="${pos}" data-line-position aria-label="${pos}" required><option value="">Choose available player</option>${Object.entries(eligible).map(([key,name])=>`<option value="${E(key)}" ${slots[pos]===key?'selected':''}>${E(name)} · Available</option>`).join('')}</select></label>`).join('')}</div>${Object.keys(eligible).length<6?`<p class="pc-muted">${Object.keys(eligible).length} available players. Six are required to post.</p>`:''}<div class="pc-actions"><button name="intent" value="draft" formnovalidate ${line?.status==='queued'?'disabled':''}>Save Draft</button><button name="intent" value="post" ${!t.server?.guild || line?.status==='queued'?'disabled':''}>${line?.status==='posted'?'Update Discord Post':'Post to Team Discord'}</button>${line?.status==='needs-review'?'<button name="intent" value="replace">Post replacement message (may duplicate)</button>':''}</div>${line?`<p class="pc-muted">Saved by ${E(line.updated_by)} · ${E(new Date(line.updated_at*1000).toLocaleString())}</p>`:''}</form></article>`;
+    const statuses={draft:'Draft',queued:'Queued for Discord','night-queued':'Night queued for Discord',posted:'Posted to Discord','needs-review':'Needs review before reposting'};
+    const days=[...new Set(t.games.map(g=>g.date))];
+    return `<div class="pc-card"><h3>${E(t.team)} · Team Lines</h3><p>Pick Available players, copy lines between games, and post one compact card for the whole night.</p><button type="button" data-command="lines">Refresh status</button><p id="pc-lines-notice" role="status"></p></div><div id="pc-team-connection" data-connection-state="${E(JSON.stringify(t.server || null))}">${connectionView(t)}</div>${days.map(day=>{
+      const games=t.games.filter(g=>g.date===day),night=t.nights?.[day],queued=night?.status==='queued';
+      return `<section data-line-night="${E(day)}"><div class="pc-card"><h3>${E(day)} · ${games.length} upcoming games</h3><p>${E(statuses[night?.status] || 'Night not posted')}${night?.status==='posted' && games.some(g=>g.line?.status==='draft')?' · Saved draft changes are waiting to be posted':''}</p><form data-action="lines" data-night-action="${E(day)}">${hidden('team',t.team)}${hidden('date',day)}${hidden('night_revision',night?.revision || 0)}<div class="pc-actions"><button name="intent" value="save-night" ${queued?'disabled':''}>Save Night’s Drafts</button><button name="intent" value="post-night" ${!t.server?.guild || queued?'disabled':''}>${night?.status==='posted'?'Update Night’s Post':'Post Night’s Lines'}</button>${night?.status==='needs-review'?'<button name="intent" value="replace-night">Post replacement night (may duplicate)</button>':''}</div><p class="pc-muted">All upcoming games need six available players to post. This saves your selections and updates the same nightly Discord message.</p></form></div>${games.map(g=>{
+        const line=g.line,slots=line?.slots || {},eligible=g.eligible,locked=queued || ['queued','night-queued'].includes(line?.status);
+        const invalid=Object.values(slots).some(k=>k && !Object.hasOwn(eligible,k));
+        return `<article class="pc-card"><h3>${E(g.time)} · ${E(g.away)} @ ${E(g.home)}</h3><p class="pc-muted">${E(g.date)} · ${E(g.timezone)} · Server: ${E(g.server || 'Not selected')}</p><span class="pc-pill">${E(statuses[line?.status] || 'Not set')}</span><p>Game code: <strong>${E(g.game_code || 'Not set in schedule')}</strong></p>${invalid?'<p class="pc-notice" role="alert">A selected player is no longer Available. Choose a replacement.</p>':''}<form data-action="lines" data-line-game="${E(g.key)}" data-line-date="${E(day)}">${hidden('team',t.team)}${hidden('game',g.key)}${hidden('revision',line?.revision || 0)}<div class="pc-lines-grid">${linePositions.map(pos=>`<label><span class="pc-line-position" data-position="${pos}">${pos}</span><select name="${pos}" data-line-position aria-label="${pos}" ${locked?'disabled':''}><option value="">Choose available player</option>${Object.entries(eligible).map(([key,name])=>`<option value="${E(key)}" ${slots[pos]===key?'selected':''}>${E(name)} · Available</option>`).join('')}</select></label>`).join('')}</div><div class="pc-actions"><button name="intent" value="draft" ${locked?'disabled':''}>Save Draft</button>${games.length>1?`<label>Copy this line to<select data-copy-target ${locked?'disabled':''}><option value="remaining">All remaining games this night</option>${games.filter(other=>other.key!==g.key).map(other=>`<option value="${E(other.key)}">${E(other.time)} · ${E(other.away)} @ ${E(other.home)}</option>`).join('')}</select></label><button type="button" data-copy-line ${locked?'disabled':''}>Copy Line</button>`:''}</div><p data-copy-warning role="status"></p>${line?`<p class="pc-muted">Saved by ${E(line.updated_by)} · ${E(new Date(line.updated_at*1000).toLocaleString())}</p>`:''}</form></article>`;
+      }).join('')}</section>`;
     }).join('') || '<p>No upcoming games.</p>'}`;
   }
   let checkingConnection=false;
@@ -316,6 +323,25 @@
     if(kind==='results') {resultsWeek=event.target.value;renderResults();}
   });
   root.addEventListener('click',async event=>{
+    const copy=event.target.closest('[data-copy-line]');
+    if(copy && !busy){
+      const source=copy.closest('form'),forms=[...root.querySelectorAll('form[data-line-game]')];
+      const choice=source.querySelector('[data-copy-target]').value;
+      const targets=forms.filter((f,index)=>f!==source && f.dataset.lineDate===source.dataset.lineDate && (choice==='remaining'?index>forms.indexOf(source):f.dataset.lineGame===choice));
+      const slots=Object.fromEntries(linePositions.map(p=>[p,source.elements[p].value]));
+      let count=0;
+      for(const destination of targets){
+        if(destination.querySelector('[data-line-position]').disabled)continue;
+        const eligible=Object.fromEntries([...destination.querySelector('[data-line-position]').options].filter(o=>o.value).map(o=>[o.value,true]));
+        const result=copyLineSlots(slots,eligible);
+        for(const pos of linePositions)destination.elements[pos].value=result.slots[pos];
+        destination.querySelector('[data-copy-warning]').textContent=result.missing.length?'Copied as an unsaved draft. Unavailable players cleared: '+result.missing.join(', ')+'. Choose replacements.':'Line copied as an unsaved draft. Review and save or post the night.';
+        count++;
+      }
+      source.querySelector('[data-copy-warning]').textContent=count?'Copied to '+count+' game(s). Review destination drafts before posting.':'No editable destination games remain that night.';
+      constrainLines();return;
+    }
+
     const response=event.target.closest('[data-game]');
     if(response && !busy) {
       const game=profile.games.find(g=>g.key===response.dataset.game);
@@ -342,8 +368,8 @@
     if(form.hasAttribute('data-team-selector')) {pairingCode='';await load(new FormData(form).get('team'));return;}
     busy=true;
     form.querySelector('button').disabled=true;
-    try {const values=new FormData(form);if(event.submitter?.name)values.set(event.submitter.name,event.submitter.value);const result=await call(['lines','team-server'].includes(form.dataset.action)?form.dataset.action:'action/'+form.dataset.action,values);if(form.dataset.action==='team-server')pairingCode=result.code || ''; notice=form.dataset.action==='lines'?(['post','replace'].includes(values.get('intent'))?'Lineup queued. Refresh status to confirm Discord delivery.':'Lineup draft saved.'):form.dataset.action==='team-server'?(result.code?'Connection code ready below.':'Team server disconnected.'):form.dataset.action==='trade-review'?'Trade decision recorded. Check the trade status below for roster completion.':form.dataset.action==='draft-pick'?'Pick submitted. Check its roster status in pick history.':form.dataset.action==='draft-pause'?'Draft status updated.':form.dataset.action==='draft-restart'?'Pick clock restarted.':result.duplicate?'This offer already exists. Check its status below.':form.dataset.action==='trade-propose'?'Trade offer sent.':'Saved.';await load();}
-    catch(error) {notice=error.message;await load();}
+    try {const values=new FormData(form);if(form.dataset.nightAction){const lineups={};root.querySelectorAll('form[data-line-game]').forEach(f=>{if(f.dataset.lineDate===form.dataset.nightAction)lineups[f.dataset.lineGame]={revision:f.elements.revision.value,slots:Object.fromEntries(linePositions.map(p=>[p,f.elements[p].value]))};});values.set('lineups',JSON.stringify(lineups));}if(event.submitter?.name)values.set(event.submitter.name,event.submitter.value);const result=await call(['lines','team-server'].includes(form.dataset.action)?form.dataset.action:'action/'+form.dataset.action,values);if(form.dataset.action==='team-server')pairingCode=result.code || '';if(form.dataset.lineGame && result.revision){form.elements.revision.value=result.revision;form.querySelector('[data-copy-warning]').textContent='Draft saved. Other unsaved lineup selections are preserved.';return;} notice=form.dataset.action==='lines'?(['post','replace','post-night','replace-night'].includes(values.get('intent'))?'Nightly lineup queued. Refresh status to confirm Discord delivery.':'Lineup drafts saved.'):form.dataset.action==='team-server'?(result.code?'Connection code ready below.':'Team server disconnected.'):form.dataset.action==='trade-review'?'Trade decision recorded. Check the trade status below for roster completion.':form.dataset.action==='draft-pick'?'Pick submitted. Check its roster status in pick history.':form.dataset.action==='draft-pause'?'Draft status updated.':form.dataset.action==='draft-restart'?'Pick clock restarted.':result.duplicate?'This offer already exists. Check its status below.':form.dataset.action==='trade-propose'?'Trade offer sent.':'Saved.';await load();}
+    catch(error) {notice=error.message;if(form.dataset.action==='lines' && root.querySelector('#pc-lines-notice'))root.querySelector('#pc-lines-notice').textContent=notice;else await load();}
     finally {busy=false;if(form.isConnected)form.querySelector('button').disabled=false;tickDraft();}
   });
   window.addEventListener('storage',event=>{

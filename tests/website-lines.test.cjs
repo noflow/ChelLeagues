@@ -7,7 +7,7 @@ test('line editor uses six available-only slots and escaped schedule codes',()=>
  for(const p of ['LW','C','RW','LD','RD','G'])assert.ok(html.includes('name="'+p+'"'));
  assert.ok(html.includes('&lt;player&gt;'));assert.ok(html.includes('&lt;secret&gt;'));
  assert.ok(!html.includes('<player>'));assert.ok(html.includes('Save Draft'));
- assert.ok(/value="post" disabled/.test(html));
+ assert.ok(/value="post-night" disabled/.test(html));
 });
 test('unavailable saved player is flagged and cannot remain a selectable option',()=>{
  const html=render({team:'BUF',admin:false,games:[{key:'x',eligible:{yes:'Available player'},line:{revision:2,status:'draft',slots:{LW:'no'},updated_at:0}}]});
@@ -37,4 +37,20 @@ test('healthy Discord connections hide setup while broken ones show reconnection
  const absent=render({team:'BUF',games:[],server:null});
  assert.ok(absent.includes('Generate connection code'));
  assert.ok(src.includes("panel.innerHTML=connectionView(state)"));
+});
+
+test('copy line clears unavailable destination players and retains positions',()=>{
+ const c=vm.createContext({source:{LW:'a',C:'b',RW:'c',LD:'d',RD:'e',G:'f'},eligible:{a:true,c:true,d:true,e:true,f:true}});
+ vm.runInContext(helpers+';result=copyLineSlots(source,eligible);',c);
+ assert.equal(c.result.slots.LW,'a');assert.equal(c.result.slots.C,'');assert.equal(c.result.slots.G,'f');
+ assert.deepEqual(Array.from(c.result.missing),['C']);
+});
+test('nightly controls group dates and copy destinations stay within the same night',()=>{
+ const game=(key,date,time)=>({key,date,time,home:'BUF',away:'TOR',eligible:{a:'Player'},line:null});
+ const html=render({team:'BUF',server:{guild:'1',healthy:true},games:[game('one','2026-11-01','9 PM'),game('two','2026-11-01','10 PM'),game('three','2026-11-02','9 PM')]});
+ assert.equal((html.match(/value="post-night"/g)||[]).length,2);
+ assert.equal((html.match(/data-copy-target/g)||[]).length,2);
+ assert.ok(!html.includes('<option value="three">'));
+ assert.ok(html.includes('All remaining games this night'));
+ assert.ok(!html.includes('Post to Team Discord'));
 });
