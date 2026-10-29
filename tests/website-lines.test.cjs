@@ -17,3 +17,13 @@ test('all league editors remain in sync and use responsive controls',()=>{
  for(const league of ['NBHL','CWHL'])assert.equal(fs.readFileSync(league+'/player-centre.js','utf8'),src);
  assert.ok(fs.readFileSync('CVHL/player-centre.css','utf8').includes('@media(max-width:600px)'));
 });
+
+test('line tab requires management assignment and has no team switcher even for admins',()=>{
+ assert.ok(src.includes('${profile.can_manage_lines ?'));
+ const html=render({team:'BUF',admin:true,teams:[{abbr:'TOR',name:'Toronto'}],games:[]});
+ assert.ok(!html.includes('data-team-selector'));
+ const css=fs.readFileSync('CVHL/player-centre.css','utf8');
+ for(const [pos,colour] of Object.entries({C:'#ed174c',LW:'#00c853',RW:'#1736a6',LD:'#00bcd4',RD:'#ffdc00',G:'#a83ee8'})) {
+  assert.ok(css.includes('[data-position="'+pos+'"]{background:'+colour));
+ }
+});
