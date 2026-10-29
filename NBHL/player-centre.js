@@ -58,7 +58,7 @@
     root.innerHTML = `<div class="pc-head"><div><h2>My Profile & Availability</h2><p class="pc-muted">Your player. Your team. Your next game.</p></div>${profile ? `<div class="pc-actions"><span>${E(profile.name)}</span>${profile.can_manage_league === true ? `<a class="pc-manage-league" href="https://admin.chelleagues.com/league/${encodeURIComponent(league)}">Manage League</a>` : ''}<button type="button" data-command="logout">Sign out</button></div>` : ''}</div>${notice ? `<div class="pc-notice" role="status">${E(notice)}</div>` : ''}${(profile?.management || profile?.can_draft || profile?.can_review_trades) ? `<div class="pc-tabs" role="tablist" aria-label="Player area"><button type="button" role="tab" aria-selected="${tab==='profile'}" data-command="profile">My Profile</button><button type="button" role="tab" aria-selected="${tab==='team'}" data-command="team">Team Availability</button>${profile.can_manage_lines ? `<button type="button" role="tab" aria-selected="${tab==='lines'}" data-command="lines">Team Lines</button>` : ''}${profile.can_trade ? `<button type="button" role="tab" aria-selected="${tab==='trades'}" data-command="trades">Trades</button>` : ''}${profile.can_review_trades ? `<button type="button" role="tab" aria-selected="${tab==='trade-reviews'}" data-command="trade-reviews">Trade Approvals</button>` : ''}${profile.can_draft ? `<button type="button" role="tab" aria-selected="${tab==='draft'}" data-command="draft">Snake Draft</button>` : ''}</div>` : ''}<div id="pc-content">${content}</div>`;
   }
   function message(text, error=false) { shell(`<div class="pc-card pc-notice" role="${error ? 'alert':'status'}">${E(text)}</div>`); }
-  function signedOut() { clearViews(); availabilityPending.clear();availabilityInFlight.clear();availabilityStatus='';clearTimeout(availabilityTimer);profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
+  function signedOut() { for(const state of lineSaves.values())clearTimeout(state.timer);lineSaves.clear();clearViews(); availabilityPending.clear();availabilityInFlight.clear();availabilityStatus='';clearTimeout(availabilityTimer);profile = null; shell('<div class="pc-card"><h3>Your player area, right here</h3><p>Sign in with Discord to claim your player, update your profile, and tell your team which games you can play.</p><button type="button" data-command="login">Sign in with Discord</button><p class="pc-muted">Discord opens briefly for sign-in, then returns you to this website. Already connected to an existing account? Use that same Discord login.</p></div>'); }
   async function call(path, data) {
     const callToken=token;
     if(data)clearViews(path==='action/availability');
@@ -261,17 +261,29 @@
     for(const pos of linePositions){const key=slots[pos] || '';copied[pos]=Object.hasOwn(eligible,key)?key:'';if(key && !copied[pos])missing.push(pos);}
     return {slots:copied,missing};
   }
+  const lineTabs=new Map();
+  function lineNightDate(day) {
+    const date=new Date(day+'T12:00:00');
+    return Number.isNaN(date.getTime())?String(day || ''):date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  }
+  function incompleteLineups(entries) {
+    return entries.flatMap((entry,index)=>{
+      const missing=linePositions.filter(pos=>!entry.slots[pos]);
+      return missing.length?[`Game ${index+1}${entry.time?' ('+entry.time+')':''}: missing ${missing.join(', ')}`]:[];
+    });
+  }
   function linesView(t) {
     linesTeam=t.team;
-    const statuses={draft:'Draft',queued:'Queued for Discord','night-queued':'Night queued for Discord',posted:'Posted to Discord','needs-review':'Needs review before reposting'};
+    const statuses={draft:'Draft saved',queued:'Queued for Discord','night-queued':'Night queued for Discord',posted:'Posted to Discord','needs-review':'Needs review before reposting'};
     const days=[...new Set(t.games.map(g=>g.date))];
-    return `<div class="pc-card"><h3>${E(t.team)} · Team Lines</h3><p>Pick Available players, copy lines between games, and post one compact card for the whole night.</p><button type="button" data-command="lines">Refresh status</button><p id="pc-lines-notice" role="status"></p></div><div id="pc-team-connection" data-connection-state="${E(JSON.stringify(t.server || null))}">${connectionView(t)}</div>${days.map(day=>{
+    return `<div class="pc-card"><h3>${E(t.team)} · Team Lines</h3><p>Lineups save automatically. Use the game tabs to set each line, then post the whole night.</p><button type="button" data-command="lines">Refresh status</button><p id="pc-lines-notice" role="status"></p></div><div id="pc-team-connection" data-connection-state="${E(JSON.stringify(t.server || null))}">${connectionView(t)}</div>${days.map(day=>{
       const games=t.games.filter(g=>g.date===day),night=t.nights?.[day],queued=night?.status==='queued';
-      return `<section data-line-night="${E(day)}"><div class="pc-card"><h3>${E(day)} · ${games.length} upcoming games</h3><p>${E(statuses[night?.status] || 'Night not posted')}${night?.status==='posted' && games.some(g=>g.line?.status==='draft')?' · Saved draft changes are waiting to be posted':''}</p><form data-action="lines" data-night-action="${E(day)}">${hidden('team',t.team)}${hidden('date',day)}${hidden('night_revision',night?.revision || 0)}<div class="pc-actions"><button name="intent" value="save-night" ${queued?'disabled':''}>Save Night’s Drafts</button><button name="intent" value="post-night" ${!t.server?.guild || queued?'disabled':''}>${night?.status==='posted'?'Update Night’s Post':'Post Night’s Lines'}</button>${night?.status==='needs-review'?'<button name="intent" value="replace-night">Post replacement night (may duplicate)</button>':''}</div><p class="pc-muted">All upcoming games need six available players to post. This saves your selections and updates the same nightly Discord message.</p></form></div>${games.map(g=>{
+      const selected=games.some(g=>g.key===lineTabs.get(day))?lineTabs.get(day):games[0].key;
+      return `<section class="pc-card pc-line-night" data-line-night="${E(day)}"><div class="pc-game-tabs" role="tablist" aria-label="Games for ${E(lineNightDate(day))}">${games.map((g,index)=>`<button type="button" role="tab" data-line-tab="${E(g.key)}" id="line-tab-${E(g.key)}" aria-controls="line-panel-${E(g.key)}" aria-selected="${g.key===selected}">Game ${index+1}</button>`).join('')}</div>${games.map((g,index)=>{
         const line=g.line,slots=line?.slots || {},eligible=g.eligible,locked=queued || ['queued','night-queued'].includes(line?.status);
         const invalid=Object.values(slots).some(k=>k && !Object.hasOwn(eligible,k));
-        return `<article class="pc-card"><h3>${E(g.time)} · ${E(g.away)} @ ${E(g.home)}</h3><p class="pc-muted">${E(g.date)} · ${E(g.timezone)} · Server: ${E(g.server || 'Not selected')}</p><span class="pc-pill">${E(statuses[line?.status] || 'Not set')}</span><p>Game code: <strong>${E(g.game_code || 'Not set in schedule')}</strong></p>${invalid?'<p class="pc-notice" role="alert">A selected player is no longer Available. Choose a replacement.</p>':''}<form data-action="lines" data-line-game="${E(g.key)}" data-line-date="${E(day)}">${hidden('team',t.team)}${hidden('game',g.key)}${hidden('revision',line?.revision || 0)}<div class="pc-lines-grid">${linePositions.map(pos=>`<label><span class="pc-line-position" data-position="${pos}">${pos}</span><select name="${pos}" data-line-position aria-label="${pos}" ${locked?'disabled':''}><option value="">Choose available player</option>${Object.entries(eligible).map(([key,name])=>`<option value="${E(key)}" ${slots[pos]===key?'selected':''}>${E(name)} · Available</option>`).join('')}</select></label>`).join('')}</div><div class="pc-actions"><button name="intent" value="draft" ${locked?'disabled':''}>Save Draft</button>${games.length>1?`<label>Copy this line to<select data-copy-target ${locked?'disabled':''}><option value="remaining">All remaining games this night</option>${games.filter(other=>other.key!==g.key).map(other=>`<option value="${E(other.key)}">${E(other.time)} · ${E(other.away)} @ ${E(other.home)}</option>`).join('')}</select></label><button type="button" data-copy-line ${locked?'disabled':''}>Copy Line</button>`:''}</div><p data-copy-warning role="status"></p>${line?`<p class="pc-muted">Saved by ${E(line.updated_by)} · ${E(new Date(line.updated_at*1000).toLocaleString())}</p>`:''}</form></article>`;
-      }).join('')}</section>`;
+        return `<article data-line-panel="${E(g.key)}" id="line-panel-${E(g.key)}" role="tabpanel" aria-labelledby="line-tab-${E(g.key)}" ${g.key===selected?'':'hidden'}><div class="pc-line-game-head"><div><h3>${E(g.time)} · ${E(g.away)} @ ${E(g.home)}</h3><p class="pc-muted">${E(g.timezone)} · Server: ${E(g.server || 'Not selected')}</p></div><time datetime="${E(day)}">${E(lineNightDate(day))}</time></div><span class="pc-pill" data-line-status>${E(statuses[line?.status] || 'Not set')}</span><p>Game code: <strong>${E(g.game_code || 'Not set in schedule')}</strong></p>${invalid?'<p class="pc-notice" role="alert">A selected player is no longer Available. Choose a replacement.</p>':''}<form data-action="lines" data-line-game="${E(g.key)}" data-line-date="${E(day)}" data-game-time="${E(g.time)}">${hidden('team',t.team)}${hidden('game',g.key)}${hidden('revision',line?.revision || 0)}<div class="pc-lines-grid">${linePositions.map(pos=>`<label><span class="pc-line-position" data-position="${pos}">${pos}</span><select name="${pos}" data-line-position aria-label="Game ${index+1} ${pos}" ${locked?'disabled':''}><option value="">Choose available player</option>${Object.entries(eligible).map(([key,name])=>`<option value="${E(key)}" ${slots[pos]===key?'selected':''}>${E(name)} · Available</option>`).join('')}</select></label>`).join('')}</div>${games.length>1?`<div class="pc-actions"><label>Copy this line to<select data-copy-target ${locked?'disabled':''}><option value="remaining">All remaining games this night</option>${games.filter(other=>other.key!==g.key).map(other=>`<option value="${E(other.key)}">Game ${games.indexOf(other)+1} · ${E(other.time)} · ${E(other.away)} @ ${E(other.home)}</option>`).join('')}</select></label><button type="button" data-copy-line ${locked?'disabled':''}>Copy Line</button></div>`:''}<p data-copy-warning role="status"></p></form></article>`;
+      }).join('')}<form data-action="lines" data-night-action="${E(day)}">${hidden('team',t.team)}${hidden('date',day)}${hidden('night_revision',night?.revision || 0)}<div class="pc-actions"><button name="intent" value="post-night" ${!t.server?.guild || queued?'disabled':''}>Post Lines</button>${night?.status==='needs-review'?'<button name="intent" value="replace-night">Post replacement night (may duplicate)</button>':''}<span data-night-save-status role="status">${E(statuses[night?.status] || 'Changes save automatically')}</span><button type="button" data-retry-lines hidden>Retry saving</button><button type="button" data-reload-lines hidden>Discard unsaved changes and reload</button></div><p class="pc-muted">Posts every game for ${E(lineNightDate(day))} in one Discord message. Each game needs all six positions filled.</p><p data-night-errors role="alert"></p></form></section>`;
     }).join('') || '<p>No upcoming games.</p>'}`;
   }
   let checkingConnection=false;
@@ -297,7 +309,82 @@
       selects.forEach(select=>{const others=selects.filter(s=>s!==select).map(s=>s.value);[...select.options].forEach(option=>option.disabled=!!option.value && others.includes(option.value));});
     });
   }
+  const lineSaves=new Map();
+  function lineSaveState(day) {
+    if(!lineSaves.has(day))lineSaves.set(day,{version:0,saved:0,timer:null,promise:null,error:''});
+    return lineSaves.get(day);
+  }
+  function pendingLineSaves() {return [...lineSaves.values()].some(state=>state.version!==state.saved || state.promise);}
+  function nightSection(day) {return [...root.querySelectorAll('[data-line-night]')].find(node=>node.dataset.lineNight===day);}
+  function nightSelections(section) {
+    return [...section.querySelectorAll('form[data-line-game]')].map(form=>({form,key:form.dataset.lineGame,time:form.dataset.gameTime,revision:form.elements.revision.value,slots:Object.fromEntries(linePositions.map(pos=>[pos,form.elements[pos].value]))}));
+  }
+  function nightSaveNotice(section,text,error='') {
+    section.querySelector('[data-night-save-status]').textContent=text;
+    const errors=section.querySelector('[data-night-errors]');
+    if(error || !errors.dataset.lineValidation)errors.textContent=error;
+    section.querySelector('[data-retry-lines]').hidden=!error;
+    section.querySelector('[data-reload-lines]').hidden=!error;
+  }
+  function queueLineSave(day) {
+    const state=lineSaveState(day),section=nightSection(day);
+    state.version++;state.error='';clearTimeout(state.timer);
+    delete section.querySelector('[data-night-errors]').dataset.lineValidation;
+    nightSaveNotice(section,'Unsaved changes - saving automatically...');
+    state.timer=setTimeout(()=>flushLineSave(day).catch(()=>{}),1200);
+  }
+  async function flushLineSave(day) {
+    const state=lineSaveState(day);
+    clearTimeout(state.timer);
+    if(state.promise){await state.promise;if(state.version!==state.saved)return flushLineSave(day);return;}
+    if(state.version===state.saved)return;
+    const section=nightSection(day);
+    if(!section)throw new Error('Open Team Lines to save pending changes.');
+    const version=state.version,owner=token,entries=nightSelections(section),form=section.querySelector('[data-night-action]');
+    const values=new FormData(form);values.set('intent','save-night');
+    values.set('lineups',JSON.stringify(Object.fromEntries(entries.map(entry=>[entry.key,{revision:entry.revision,slots:entry.slots}]))));
+    nightSaveNotice(section,'Saving changes...');
+    state.promise=(async()=>{
+      try {
+        const result=await call('lines',values);
+        if(token!==owner)throw new Error('Sign-in changed. Reload Team Lines.');
+        if(!result.revisions)throw new Error('Save could not be confirmed. Refresh status before editing further.');
+        for(const entry of entries){entry.form.elements.revision.value=result.revisions[entry.key];entry.form.closest('[data-line-panel]').querySelector('[data-line-status]').textContent='Draft saved';}
+        form.elements.night_revision.value=result.night_revision;
+        state.saved=version;state.error='';editGeneration++;
+        nightSaveNotice(section,state.version===version?'All changes saved.':'Saving your latest changes...');
+      } catch(error) {
+        state.error=error.message;clearTimeout(state.timer);
+        nightSaveNotice(section,'Changes not confirmed saved.',error.message+' Your selections are still here.');
+        throw error;
+      } finally {state.promise=null;}
+    })();
+    await state.promise;
+    if(state.version!==state.saved)return flushLineSave(day);
+  }
+  async function postLineNight(form,intent) {
+    const section=form.closest('[data-line-night]'),day=section.dataset.lineNight;
+    let missing=incompleteLineups(nightSelections(section));
+    if(missing.length){const errors=section.querySelector('[data-night-errors]');errors.dataset.lineValidation='true';errors.textContent='Cannot post lines. '+missing.join('; ');return;}
+    delete section.querySelector('[data-night-errors]').dataset.lineValidation;
+    const controls=[...section.querySelectorAll('button,select')].filter(control=>!control.disabled && !control.hasAttribute('data-line-tab'));
+    busy=true;controls.forEach(control=>control.disabled=true);
+    let posted=false;
+    try {
+      await flushLineSave(day);
+      const entries=nightSelections(section),values=new FormData(form);
+      values.set('intent',intent);values.set('lineups',JSON.stringify(Object.fromEntries(entries.map(entry=>[entry.key,{revision:entry.revision,slots:entry.slots}]))));
+      const result=await call('lines',values);
+      form.elements.night_revision.value=result.night_revision;
+      for(const entry of entries)entry.form.elements.revision.value=result.revisions[entry.key];
+      lineSaves.delete(day);posted=true;editGeneration++;
+      nightSaveNotice(section,'Nightly lines queued for Discord. Use Refresh status to check delivery.');
+      section.querySelectorAll('[data-line-status]').forEach(node=>node.textContent='Queued for Discord');
+    } catch(error){nightSaveNotice(section,'Lines not posted.',error.message);}
+    finally{busy=false;if(!posted)controls.forEach(control=>control.disabled=false);}
+  }
   async function load(team='') {
+    if(pendingLineSaves() && token===localStorage.getItem(storageKey) && root.querySelector('[data-line-night]'))return;
     token = localStorage.getItem(storageKey) || '';
     const generation = ++viewGeneration;
     if (!token) { draftData=null;signedOut(); return; }
@@ -354,7 +441,7 @@
   root.addEventListener('input',()=>{editGeneration++;});
   root.addEventListener('change',event=>{
     editGeneration++;
-    if(event.target.matches('[data-line-position]')){constrainLines();return;}
+    if(event.target.matches('[data-line-position]')){constrainLines();queueLineSave(event.target.closest('form').dataset.lineDate);return;}
     if(event.target.matches('[data-trade-team]')) {root.querySelector('#pc-trade-receiver').innerHTML=tradeChoices(event.target.value,'receiver');return;}
     const kind=event.target.dataset.week;
     if(kind==='schedule') {scheduleWeek=event.target.value;shell(profileView(profile));renderResults();if(availabilityStatus)availabilityNotice(availabilityStatus,availabilityFailed);}
@@ -414,8 +501,19 @@
     availabilitySaving=false;
     if(availabilityPending.size)availabilityTimer=setTimeout(saveAvailability,200);
   }
-  window.addEventListener('beforeunload',event=>{if(availabilityPending.size || availabilitySaving){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{if(availabilityPending.size || availabilitySaving || pendingLineSaves()){event.preventDefault();event.returnValue='';}});
   root.addEventListener('click',async event=>{
+    const gameTab=event.target.closest('[data-line-tab]');
+    if(gameTab){
+      const section=gameTab.closest('[data-line-night]');lineTabs.set(section.dataset.lineNight,gameTab.dataset.lineTab);
+      section.querySelectorAll('[data-line-tab]').forEach(button=>button.setAttribute('aria-selected',button===gameTab));
+      section.querySelectorAll('[data-line-panel]').forEach(panel=>panel.hidden=panel.dataset.linePanel!==gameTab.dataset.lineTab);
+      return;
+    }
+    if(event.target.closest('[data-reload-lines]')){if([...lineSaves.values()].some(state=>state.promise))return;for(const state of lineSaves.values())clearTimeout(state.timer);lineSaves.clear();clearViews();await load();return;}
+    const retryLines=event.target.closest('[data-retry-lines]');
+    if(retryLines){flushLineSave(retryLines.closest('[data-line-night]').dataset.lineNight).catch(()=>{});return;}
+
     const copy=event.target.closest('[data-copy-line]');
     if(copy && !busy){
       editGeneration++;
@@ -429,11 +527,11 @@
         const eligible=Object.fromEntries([...destination.querySelector('[data-line-position]').options].filter(o=>o.value).map(o=>[o.value,true]));
         const result=copyLineSlots(slots,eligible);
         for(const pos of linePositions)destination.elements[pos].value=result.slots[pos];
-        destination.querySelector('[data-copy-warning]').textContent=result.missing.length?'Copied as an unsaved draft. Unavailable players cleared: '+result.missing.join(', ')+'. Choose replacements.':'Line copied as an unsaved draft. Review and save or post the night.';
+        destination.querySelector('[data-copy-warning]').textContent=result.missing.length?'Line copied. Unavailable players cleared: '+result.missing.join(', ')+'. Choose replacements.':'Line copied and saving automatically. Review before posting.';
         count++;
       }
-      source.querySelector('[data-copy-warning]').textContent=count?'Copied to '+count+' game(s). Review destination drafts before posting.':'No editable destination games remain that night.';
-      constrainLines();return;
+      source.querySelector('[data-copy-warning]').textContent=count?'Copied to '+count+' game(s). Saving automatically; review before posting.':'No editable destination games remain that night.';
+      constrainLines();if(count)queueLineSave(source.dataset.lineDate);return;
     }
 
     const response=event.target.closest('[data-game]');
@@ -452,6 +550,7 @@
     if(event.target.closest('[data-retry-availability]')){saveAvailability();return;}
     const command=event.target.closest('[data-command]')?.dataset.command;
     if (!command || busy) return;
+    if(pendingLineSaves()){const node=root.querySelector('#pc-lines-notice');if(node)node.textContent='Lineups are still saving. Wait for All changes saved, or retry a failed save before leaving.';return;}
     if (command==='login') {try {await signIn();} catch {message('Sign-in could not start. Please enable website storage and try again.',true);}return;}
     if (command==='logout' && (availabilityPending.size || availabilitySaving)){availabilityNotice('Wait for availability to save, or discard pending changes before signing out.',!availabilitySaving);return;}
     if (command==='logout') {availabilityStatus='';availabilityPending.clear();clearTimeout(availabilityTimer);++viewGeneration;draftData=null;try {await call('action/logout',{});} catch {} token='';profile=null;sessionStorage.removeItem(storageKey); localStorage.removeItem(storageKey);notice='';signedOut();return;}
@@ -461,6 +560,9 @@
     event.preventDefault();if(busy)return;
     if(availabilityPending.size || availabilitySaving){availabilityNotice('Availability is still saving. Try this action once it finishes.',availabilityFailed);return;}
     const form=event.target;
+    if(form.dataset.nightAction){await postLineNight(form,event.submitter?.value || 'post-night');return;}
+    if(form.dataset.lineGame){queueLineSave(form.dataset.lineDate);return;}
+    if(pendingLineSaves()){root.querySelector('#pc-lines-notice').textContent='Wait for lineup changes to finish saving first.';return;}
     if(form.hasAttribute('data-team-selector')) {pairingCode='';await load(new FormData(form).get('team'));return;}
     busy=true;
     form.querySelector('button').disabled=true;
@@ -470,6 +572,7 @@
   });
   window.addEventListener('storage',event=>{
     if(event.key!==storageKey && event.key!==null)return;
+    for(const state of lineSaves.values())clearTimeout(state.timer);lineSaves.clear();
     availabilityPending.clear();availabilityInFlight.clear();availabilityStatus='';clearTimeout(availabilityTimer);
     token=localStorage.getItem(storageKey) || '';profile=null;
     if(active)load();

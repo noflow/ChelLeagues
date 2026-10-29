@@ -6,7 +6,7 @@ test('line editor uses six available-only slots and escaped schedule codes',()=>
  const html=render({team:'BUF',admin:false,games:[{key:'x',date:'2026-10-30',time:'9 PM',home:'BUF',away:'TOR',game_code:'<secret>',eligible:{player:'<player>'},line:null}],server:null});
  for(const p of ['LW','C','RW','LD','RD','G'])assert.ok(html.includes('name="'+p+'"'));
  assert.ok(html.includes('&lt;player&gt;'));assert.ok(html.includes('&lt;secret&gt;'));
- assert.ok(!html.includes('<player>'));assert.ok(html.includes('Save Draft'));
+ assert.ok(!html.includes('<player>'));assert.ok(html.includes('Post Lines'));assert.ok(!html.includes('Save Draft'));
  assert.ok(/value="post-night" disabled/.test(html));
 });
 test('unavailable saved player is flagged and cannot remain a selectable option',()=>{
@@ -54,3 +54,6 @@ test('nightly controls group dates and copy destinations stay within the same ni
  assert.ok(html.includes('All remaining games this night'));
  assert.ok(!html.includes('Post to Team Discord'));
 });
+
+test('each night has game tabs, one visible panel and a readable date',()=>{const game=(key)=>({key,date:'2026-11-04',time:'9 PM',home:'BUF',away:'TOR',eligible:{},line:null});const html=render({team:'BUF',games:[game('one'),game('two'),game('three')]});for(const n of [1,2,3])assert.ok(html.includes('>Game '+n+'</button>'));assert.equal((html.match(/role="tabpanel"/g)||[]).length,3);assert.equal((html.match(/aria-labelledby="line-tab-[^"]+" hidden/g)||[]).length,2);assert.ok(html.includes('Nov 4, 2026'));assert.ok(!html.includes('Save Night'));});
+test('posting validation lists each incomplete game and its positions',()=>{const ctx=vm.createContext({entries:[{time:'9 PM',slots:{LW:'a',C:'b',RW:'c',LD:'d',RD:'e',G:'f'}},{time:'10 PM',slots:{LW:'a'}},{slots:{}}]});vm.runInContext(helpers+';issues=incompleteLineups(entries)',ctx);assert.equal(ctx.issues.length,2);assert.ok(ctx.issues[0].includes('Game 2 (10 PM): missing C, RW, LD, RD, G'));assert.ok(ctx.issues[1].includes('Game 3'));});

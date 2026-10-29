@@ -103,3 +103,12 @@
 #player-centre .pc-line-position[data-position="LD"]{background:#00bcd4}
 #player-centre .pc-line-position[data-position="RD"]{background:#ffdc00}
 #player-centre .pc-line-position[data-position="G"]{background:#a83ee8 ;color:#fff}
+
+#player-centre .pc-game-tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+#player-centre .pc-game-tabs [aria-selected="true"]{background:var(--pc-accent);color:#061729;border-color:var(--pc-accent)}
+#player-centre [data-line-panel][hidden]{display:none!important}
+#player-centre .pc-line-game-head{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+#player-centre .pc-line-game-head h3{margin-top:0}
+#player-centre .pc-line-game-head time{font-weight:800;white-space:nowrap}
+#player-centre [data-night-errors]:not(:empty){color:var(--pc-ink);border-left:4px solid #ed174c;padding:12px;background:#ed174c18}
+@media(max-width:600px){#player-centre .pc-line-game-head{flex-direction:column;gap:4px}#player-centre .pc-game-tabs button{flex:1;min-width:72px}}
