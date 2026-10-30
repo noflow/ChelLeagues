@@ -27,6 +27,8 @@
   window.ChelWatch={parseStream,selectLive,fullscreen};
   if(typeof document==='undefined')return;
   const config=document.querySelector('script[data-player-league]');if(!config)return;
+  // A short-lived, link-only preview for the registered CVHL broadcaster.
+  const preview=config.dataset.playerLeague==='continental-virtual-hockey-league' && /(?:^|[?&])preview=slur1979(?:&|$)/.test(location.search||'');
   const page=document.createElement('section');page.id='page-watch-live';page.className='page';
   page.innerHTML='<div class="section-title">Watch Live</div><p id="wl-status" role="status"></p><div id="wl-guide" class="wl-screens"></div>';
   document.querySelector('main').append(page);
@@ -65,7 +67,7 @@
     card.setAttribute('aria-label',title);
     const heading=element('h3','','wl-matchup');
     heading.append(teamBadge(game.away,'away'),element('span','VS','wl-versus'),teamBadge(game.home,'home'));
-    const meta=element('div','','wl-match-meta'),time=element('span',game.empty?'STREAM '+String(game.slot).padStart(2,'0'):game.time+' ET','wl-time');
+    const meta=element('div','','wl-match-meta'),time=element('span',game.empty?'STREAM '+String(game.slot).padStart(2,'0'):game.preview?'STREAM PREVIEW':game.time+' ET','wl-time');
     const badge=element('span',game.empty?'STANDBY':'CONNECTING','wl-state');badge.setAttribute('role','status');meta.append(time,badge);
     const media=element('div','','wl-media'),controls=element('div','','wl-controls');
     const select=element('select');select.setAttribute('aria-label','Choose broadcast for '+title);select.hidden=true;
@@ -110,6 +112,7 @@
     for(const result of results){if(result.status!=='fulfilled')continue;const data=result.value,idx=getIndexMap(data.cols);
       for(const row of data.rows){if(scoreNightDate(row[idx.Date])!==day)continue;const away=String(row[idx.Away]||''),home=String(row[idx.Home]||''),time=String(row[idx.Time]||'');
         if(away&&home)games.set([away,home,time].join('|'),{date:day,away,home,time});}}
+    if(!games.size&&preview)games.set('preview',{date:day,away:'New York Rangers',home:'Stream Preview',time:'',preview:true});
     return [...games.values()].sort((a,b)=>scheduleTimeMinutes(a.time)-scheduleTimeMinutes(b.time));
   }
   async function refresh(){
@@ -121,9 +124,9 @@
       for(const [key,view] of cards)if(!current.has(key)){view.card.remove();cards.delete(key);}
       fillScreens(games.length);
       if(!games.length){status('');return;}
-      const roster=await ensureOfficialRosterLoaded();if(owner!==epoch||!active())return;
+      const roster=views.every(({game})=>game.preview)?{teams:{}}:await ensureOfficialRosterLoaded();if(owner!==epoch||!active())return;
       const targets=new Map(),candidates=new Map(views.map(({view})=>[view,[]]));
-      for(const {game,view} of views)for(const team of [game.away,game.home])for(const name of officialRosterNameSet(roster.teams[nameToAbbr(cleanTeamName(team))])){
+      for(const {game,view} of views)for(const team of [game.away,game.home])for(const name of game.preview?(team===game.away?['XxSlur1979xX']:[]):officialRosterNameSet(roster.teams[nameToAbbr(cleanTeamName(team))])){
         if(!targets.has(name))targets.set(name,new Set());targets.get(name).add(view);
       }
       let failures=0,unconfigured=false;const queue=[...targets.keys()];
