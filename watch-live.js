@@ -28,7 +28,7 @@
   if(typeof document==='undefined')return;
   const config=document.querySelector('script[data-player-league]');if(!config)return;
   const page=document.createElement('section');page.id='page-watch-live';page.className='page';
-  page.innerHTML='<div class="section-title">Watch Live</div><p>Every game tonight, with live broadcasts from each team’s roster. Streams update automatically and start muted. Choose a player’s audio controls for sound.</p><button id="wl-refresh" type="button">Refresh streams</button><p id="wl-status" role="status"></p><div id="wl-guide" class="wl-screens"></div>';
+  page.innerHTML='<div class="section-title">Watch Live</div><p id="wl-status" role="status"></p><div id="wl-guide" class="wl-screens"></div>';
   document.querySelector('main').append(page);
   const status=text=>document.getElementById('wl-status').textContent=text;
   const cards=new Map(),buttons=[];let busy=false,epoch=0;
@@ -85,7 +85,7 @@
       const guide=document.getElementById('wl-guide'),current=new Set(),views=games.map(game=>({game,view:gameView(game)}));
       for(const {view} of views){current.add(view.key);if(!view.card.parentNode)guide.append(view.card);}
       for(const [key,view] of cards)if(!current.has(key)){view.card.remove();cards.delete(key);}
-      if(!games.length){status('No games scheduled today (Eastern time). Check back on game day.');return;}
+      if(!games.length){status('');return;}
       const roster=await ensureOfficialRosterLoaded();if(owner!==epoch||!active())return;
       const targets=new Map(),candidates=new Map(views.map(({view})=>[view,[]]));
       for(const {game,view} of views)for(const team of [game.away,game.home])for(const name of officialRosterNameSet(roster.teams[nameToAbbr(cleanTeamName(team))])){
@@ -112,7 +112,6 @@
       status(`${games.length} games tonight. Auto-refreshes every 60 seconds.${unconfigured?' Live detection needs the streaming provider credentials configured on the server.':''}${failures?' Some streams could not be checked; retrying automatically.':''}`);
     }catch(error){if(owner===epoch&&active())status(error.message);}finally{busy=false;if(owner!==epoch&&active())refresh();}
   }
-  document.getElementById('wl-refresh').onclick=refresh;
   const show=window.showPage;window.showPage=function(id,button){show(id,button);if(id!=='watch-live')clear();};
   async function update(){try{const games=await fixtures();buttons.forEach(b=>b.hidden=!games.length);}catch{/* Optional viewing must not block the league site. */}}
   document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const view of cards.values()){view.card.classList.remove('wl-expanded');view.expand.textContent='Expand game';}});
