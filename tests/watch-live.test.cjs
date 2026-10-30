@@ -49,8 +49,8 @@ test('unsafe URLs and unsupported providers cannot become embedded players',()=>
 test('every league loads the viewer and exposes its schedule and roster adapters',()=>{
   for(const league of ['CVHL','CWHL','NBHL']){
     const html=fs.readFileSync(path.join(root,league,'index.html'),'utf8');
-    assert.match(html,/defer src="\.\.\/watch-live.js\?v=3"/);
-    assert.match(html,/href="\.\.\/watch-live.css\?v=3"/);
+    assert.match(html,/defer src="\.\.\/watch-live.js\?v=4"/);
+    assert.match(html,/href="\.\.\/watch-live.css\?v=4"/);
     for(const name of ['scoreNightDate','officialRosterNameSet','ensureOfficialRosterLoaded','fetchScheduleTab','scheduleTabForPhase','scheduleTimeMinutes'])
       assert.ok(html.includes('function '+name+'('),league+' missing '+name);
   }
@@ -86,17 +86,19 @@ test('nightly guide auto-populates all games, preserves playback on refresh and 
     setInterval:fn=>timers.push(fn),fetchScheduleTab:async()=>({cols:['Date','Away','Home','Time'],rows:[[day,'A','B','9:00 PM'],[day,'C','D','9:30 PM']]}),
     scheduleTabForPhase:phase=>phase,getIndexMap:cols=>Object.fromEntries(cols.map((v,i)=>[v,i])),scoreNightDate:value=>value,scheduleTimeMinutes:()=>0,
     ensureOfficialRosterLoaded:async()=>({teams:{A:{names:['one']},C:{names:['two']}}}),
-    cleanTeamName:value=>value,nameToAbbr:value=>value,officialRosterNameSet:roster=>new Set(roster?.names||[]),
+    cleanTeamName:value=>value,nameToAbbr:value=>value,displayTeamName:value=>'Team '+value,teamLogoSrc:value=>'images/'+value+'.png',officialRosterNameSet:roster=>new Set(roster?.names||[]),
     fetch:async url=>{requests++;return {ok:true,json:async()=>({stream_url:'https://twitch.tv/'+(url.includes('one')?'one':'two'),state:current})};}
   };
   vm.runInNewContext(source,sandbox);
   async function settle(){for(let i=0;i<10;i++)await new Promise(resolve=>setImmediate(resolve));}
   await settle();
-  const guide=ids.get('wl-guide');assert.equal(guide.children.length,2);
+  const guide=ids.get('wl-guide');assert.equal(guide.children.length,4);
+  assert.equal(guide.children[0].querySelector('img').src,'images/A.png');
+  assert.equal(guide.children[0].querySelector('h3').children[1].textContent,'VS');
   const first=guide.children[0].querySelector('iframe');assert.ok(first);assert.ok(guide.children[1].querySelector('iframe'));
   assert.equal(first.allowFullscreen,true);assert.match(first.allow,/fullscreen/);
   timers[0]();await settle();assert.equal(guide.children[0].querySelector('iframe'),first);
   current='offline';timers[0]();await settle();assert.equal(guide.children[0].querySelector('iframe'),null);
-  assert.equal(guide.children.length,2);assert.ok(requests>=6);
+  assert.equal(guide.children.length,4);assert.ok(requests>=6);
   sandbox.window.showPage('home');assert.equal(guide.children.length,0);
 });
