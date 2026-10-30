@@ -95,7 +95,7 @@ test('nightly guide auto-populates all games, preserves playback on refresh and 
   const guide=ids.get('wl-guide');assert.equal(guide.children.length,2);
   const first=guide.children[0].querySelector('iframe');assert.ok(first);assert.ok(guide.children[1].querySelector('iframe'));
   assert.equal(first.allowFullscreen,true);assert.match(first.allow,/fullscreen/);
-  ids.get('wl-refresh').onclick();await settle();assert.equal(guide.children[0].querySelector('iframe'),first);
+  timers[0]();await settle();assert.equal(guide.children[0].querySelector('iframe'),first);
   current='offline';timers[0]();await settle();assert.equal(guide.children[0].querySelector('iframe'),null);
   assert.equal(guide.children.length,2);assert.ok(requests>=6);
   sandbox.window.showPage('home');assert.equal(guide.children.length,0);
