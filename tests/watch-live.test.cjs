@@ -49,8 +49,8 @@ test('unsafe URLs and unsupported providers cannot become embedded players',()=>
 test('every league loads the viewer and exposes its schedule and roster adapters',()=>{
   for(const league of ['CVHL','CWHL','NBHL']){
     const html=fs.readFileSync(path.join(root,league,'index.html'),'utf8');
-    assert.match(html,/defer src="\.\.\/watch-live.js\?v=2"/);
-    assert.match(html,/href="\.\.\/watch-live.css\?v=2"/);
+    assert.match(html,/defer src="\.\.\/watch-live.js\?v=3"/);
+    assert.match(html,/href="\.\.\/watch-live.css\?v=3"/);
     for(const name of ['scoreNightDate','officialRosterNameSet','ensureOfficialRosterLoaded','fetchScheduleTab','scheduleTabForPhase','scheduleTimeMinutes'])
       assert.ok(html.includes('function '+name+'('),league+' missing '+name);
   }
