@@ -1925,6 +1925,29 @@
     }
   }
 
+  /* Phone tables: fit standings and keep goalie names in view while scrolling stats. */
+  @media(max-width:640px){
+    #page-standings .stand-table{
+      min-width:0;width:100%;table-layout:fixed;
+    }
+    #page-standings .stand-table th,
+    #page-standings .stand-table td{min-width:0}
+    #page-standings .stand-table th:first-child,
+    #page-standings .stand-table td:first-child{
+      min-width:0;max-width:none;width:24%;
+    }
+    #page-standings .stand-team-link{min-width:0}
+    #page-goalies .test-table-scroll{
+      overflow-x:auto;-webkit-overflow-scrolling:touch;
+    }
+    #page-goalies .stat-table th:first-child,
+    #page-goalies .stat-table td:first-child{
+      position:sticky;left:0;z-index:2;min-width:138px;max-width:none;width:138px;
+      box-shadow:2px 0 8px rgba(0,8,23,.35);
+    }
+    #page-goalies .stat-table th:first-child{z-index:6}
+  }
+
   /* Database test profile shares the league palette; account data remains separate. */
   #page-profile{color:#f5faff;max-width:1120px;margin:auto}
   #page-profile .section-title{color:#f5faff;border-color:#40c6ff}
