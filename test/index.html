@@ -2051,13 +2051,13 @@
   }
   function players() {
     const q=$('player-search').value.trim().toLowerCase(), id=$('player-team').value;
-    const rows=data.players.filter(p=>(!id||String(p.team_id)===id)&&p.name.toLowerCase().includes(q)).sort((a,b)=>b.points-a.points||b.goals-a.goals||a.name.localeCompare(b.name));
+    const rows=data.players.filter(p=>p.section!=='TC'&&(!id||String(p.team_id)===id)&&p.name.toLowerCase().includes(q)).sort((a,b)=>b.points-a.points||b.goals-a.goals||a.name.localeCompare(b.name));
     $('player-count').textContent=rows.length+' players';
     $('player-table-wrap').innerHTML=statsTable(rows);
   }
   $('player-search').addEventListener('input',players);
   function goalies() {
-    const rows=data.players.filter(p=>p.goalie?.games_played>0||/^(g|goalie)$/i.test(p.position)||p.saves>0).sort((a,b)=>(b.goalie?.saves||0)-(a.goalie?.saves||0)||a.name.localeCompare(b.name));
+    const rows=data.players.filter(p=>p.section!=='TC'&&(p.goalie?.games_played>0||/^(g|goalie)$/i.test(p.position)||p.saves>0)).sort((a,b)=>(b.goalie?.saves||0)-(a.goalie?.saves||0)||a.name.localeCompare(b.name));
     $('goalie-table-wrap').innerHTML=statsTable(rows,true);
   }
   const rosterSkaterFields = [
@@ -2111,9 +2111,10 @@
     area.style.setProperty('--team-accent',accent);
     area.style.setProperty('--team-logo',logos[t.abbr]?'url("../CVHL/images/'+encodeURIComponent(logos[t.abbr])+'")':'none');
     $('team-nav').querySelectorAll('button').forEach(b=>b.classList.toggle('active',Number(b.dataset.team)===id));
-    const roster=data.players.filter(p=>p.team_id===id).sort((a,b)=>a.name.localeCompare(b.name));
+    const roster=data.players.filter(p=>p.team_id===id&&p.section!=='TC').sort((a,b)=>a.name.localeCompare(b.name));
     const goalies=roster.filter(p=>/^(g|goalie)$/i.test(p.position)||p.goalie?.games_played>0);
     const skaters=roster.filter(p=>!goalies.includes(p));
+    const tc=data.players.filter(p=>p.team_id===id&&p.section==='TC').sort((a,b)=>a.name.localeCompare(b.name));
     const games=data.games.filter(g=>g.status==='final'&&(g.home_team_id===id||g.away_team_id===id));
     const wins=games.filter(g=>(g.home_team_id===id?g.home_score:g.away_score)>(g.home_team_id===id?g.away_score:g.home_score)).length;
     const losses=games.filter(g=>(g.home_team_id===id?g.home_score:g.away_score)<(g.home_team_id===id?g.away_score:g.home_score)).length;
@@ -2131,7 +2132,8 @@
       (data.salary_cap!=null?'<div class="team-banner-cap"><div class="team-banner-cap-label">Cap Remaining</div><div class="team-banner-cap-value">'+safe(capRemaining)+'</div></div>':'')+'</div>'+
       '<div class="team-management">'+management+'</div>'+
       '<div class="subsection-label">Rostered Skaters <span class="subsection-note">'+skaters.length+' players</span></div>'+teamRosterTable(skaters)+
-      '<div class="subsection-label">Rostered Goalies <span class="subsection-note">'+goalies.length+' players</span></div>'+teamRosterTable(goalies,true);
+      '<div class="subsection-label">Rostered Goalies <span class="subsection-note">'+goalies.length+' players</span></div>'+teamRosterTable(goalies,true)+
+      '<div class="subsection-label">Training Camp (TC) <span class="subsection-note">'+tc.length+' players</span></div>'+(tc.length?teamRosterTable(tc):'<p class="test-empty">No training camp players.</p>');
     if(navigate){const nav=document.querySelector('#main-nav [data-page="teams"]');page('teams',nav);}
   }
   function teams() {
@@ -2222,7 +2224,7 @@
     const keys=Array.isArray(data.stat_views?.home_top5)?data.stat_views.home_top5:defaults;
     return keys.filter(key=>homeCardDefinitions[key]).map(key=>{
       const [label,kind,order,format]=homeCardDefinitions[key];
-      const pool=kind==='goalie'?data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0):data.players;
+      const pool=kind==='goalie'?data.players.filter(p=>p.section!=='TC'&&(/^(g|goalie)$/i.test(p.position)||p.saves>0)):data.players.filter(p=>p.section!=='TC');
       return leaders(label,pool,[key],order,format,kind);
     }).join('');
   }
@@ -2249,6 +2251,7 @@
     data=result;
     const projected=new Map((data.published_player_stats||[]).map(s=>[s.player_id+':'+s.phase+':'+s.kind,s]));
     data.players.forEach(p=>{p.skater=projected.get(p.id+':regular:skater');p.goalie=projected.get(p.id+':regular:goalie');p.playoff_skater=projected.get(p.id+':playoff:skater');p.playoff_goalie=projected.get(p.id+':playoff:goalie');});
+    data.players.push(...(data.training_camp_players||[]));
     choices('player-team');choices('schedule-team');choices('game-team');
     standings();players();goalies();teams();schedule();games();home();gameCarousel();
     const target=location.hash.slice(1).split('?')[0];
@@ -2258,6 +2261,6 @@
   retryFeed();
 })();
 </script>
-<script defer src="profile.js?v=2"></script>
+<script defer src="profile.js?v=3"></script>
 </body>
 </html>
