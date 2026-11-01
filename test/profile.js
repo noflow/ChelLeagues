@@ -61,7 +61,10 @@
         '</strong></span><label class="tp-response">Availability<select data-test-game="'+escape(game.id)+
         '" data-saved-status="'+escape(status)+'" class="availability-'+escape(status)+'"'+(open?'':' disabled')+'>'+
         availabilityOptions.map(([value,label])=>'<option value="'+value+'"'+(status===value?' selected':'')+'>'+label+'</option>').join('')+
-        '</select></label></li>';
+        '</select><div class="tp-quick-response" role="group" aria-label="Availability for '+escape(game.opponent_name)+'">'+
+        [['available','Available'],['unavailable','Unavailable']].map(([value,label])=>
+          '<button type="button" data-quick-game="'+escape(game.id)+'" data-quick-status="'+value+'" class="'+value+'" aria-pressed="'+(status===value)+'"'+(open?'':' disabled')+'>'+label+'</button>').join('')+
+        '</div></label></li>';
     }).join('')+'</ul>';
   }
   function selectedWeek(data) {
@@ -70,6 +73,34 @@
       .filter(game=>game.status==='scheduled' && new Date(game.starts_at).getTime()>Date.now())
       .sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at))[0];
     return next?.week_number || weeks.at(-1)?.number || 1;
+  }
+  function results(data) {
+    const games=data.recent_results || [];
+    if(!games.length) return '<p class="tp-muted">No completed team games in the test database yet.</p>';
+    return '<ul class="tp-games tp-results">'+games.map(game=>{
+      const home=game.home_team_id===data.player.team_id;
+      const ours=home?game.home_score:game.away_score;
+      const theirs=home?game.away_score:game.home_score;
+      return '<li><span>'+escape(niceTime(game.starts_at))+'<br><strong>'+
+        escape((home?'vs ':'@ ')+game.opponent_name)+'</strong></span><strong>'+
+        escape(ours)+' – '+escape(theirs)+(game.overtime?' · OT':'')+'</strong></li>';
+    }).join('')+'</ul>';
+  }
+  function paintResponse(select) {
+    select.className='availability-'+select.value;
+    const row=select.closest('li');
+    row?.querySelectorAll('[data-quick-status]').forEach(button=>{
+      button.setAttribute('aria-pressed',String(button.dataset.quickStatus===select.value));
+    });
+  }
+  function statMetrics(data, regular, isGoalie) {
+    const p=data.player;
+    return isGoalie ? [['GP',regular.games_played],['Wins',regular.wins],['Saves',regular.saves],
+      ['Save %',regular.save_pct],['GAA',regular.gaa],['Shots against',regular.shots_against]]
+      : [['GP',regular?.games_played ?? p?.gp ?? 0],['Goals',regular?.goals ?? p?.goals ?? 0],
+        ['Assists',regular?.assists ?? p?.assists ?? 0],['Points',regular?.points ?? p?.points ?? 0],
+        ['Points / GP',regular?.points_per_game],['Shots',regular?.shots ?? p?.shots ?? 0],
+        ['Shot %',regular?.shot_pct]];
   }
   function render(data) {
     currentProfile=data;
@@ -83,13 +114,12 @@
     if(data.status==='ambiguous') note='More than one test player matches '+data.linked_name+'. Ask a league admin to resolve it.';
     const regular=stats.find(s=>s.phase==='regular' && s.kind==='skater') || stats.find(s=>s.phase==='regular' && s.kind==='goalie');
     const isGoalie=regular?.kind==='goalie';
-    const metrics=isGoalie ? [['GP',regular.games_played],['Wins',regular.wins],['Saves',regular.saves],['Save %',regular.save_pct]]
-      : [['GP',regular?.games_played ?? 0],['Goals',regular?.goals ?? 0],['Assists',regular?.assists ?? 0],['Points',regular?.points ?? 0]];
+    const metrics=statMetrics(data,regular,isGoalie);
     panel.innerHTML='<div class="tp-hero"><p class="tp-kicker">CVHL database test · '+escape(data.season?.name || 'League')+'</p><h2>'+escape(heading)+'</h2>'+
       '<p class="tp-muted">'+(p ? (data.status==='training_camp' ? 'Training Camp (TC) with '+escape(team?.name || 'your team')+'. Your TC placement comes from the test database.' : 'Your roster and game totals below come from the test database.') : escape(note))+'</p>'+
       '<div class="tp-actions"><button class="tp-button secondary" type="button" data-profile-refresh>Refresh</button><button class="tp-button secondary" type="button" data-profile-logout>Sign out</button></div></div>'+
       (p ? '<div class="tp-grid"><section class="tp-card"><h3>'+(data.status==='training_camp'?'Training Camp (TC)':'Roster')+'</h3><dl><div><dt>Team</dt><dd>'+escape(team?.name || 'Unassigned')+'</dd></div><div><dt>Position</dt><dd>'+escape(p.position || 'Not listed')+'</dd></div><div><dt>Salary</dt><dd>'+escape(p.salary == null ? 'Not listed' : '$'+Number(p.salary).toLocaleString('en-US'))+'</dd></div><div><dt>Account</dt><dd>'+escape(data.account_name)+'</dd></div></dl></section>'+
-      '<section class="tp-card"><h3>Regular season</h3><div class="tp-stat-grid">'+metrics.map(([label,value])=>'<div class="tp-stat"><strong>'+escape(value)+'</strong><span>'+escape(label)+'</span></div>').join('')+'</div></section>'+
+      '<section class="tp-card"><h3>Regular season</h3><div class="tp-stat-grid">'+metrics.map(([label,value])=>'<div class="tp-stat"><strong>'+escape(value ?? '—')+'</strong><span>'+escape(label)+'</span></div>').join('')+'</div></section>'+
       '<section class="tp-card"><h3>Player settings</h3><form data-test-preferences><label>Platform<select name="platform"><option value="">Select platform</option>'+['Xbox','PlayStation'].map(value=>'<option value="'+value+'"'+(prefs.platform===value?' selected':'')+'>'+value+'</option>').join('')+'</select></label><label>Preferred positions<input name="positions" maxlength="80" placeholder="C, RW" value="'+escape(prefs.positions || '')+'"></label><label>Stream URL<input name="stream_url" type="url" maxlength="300" placeholder="https://twitch.tv/yourchannel" value="'+escape(prefs.stream_url || '')+'"></label><button class="tp-button" type="submit">Save settings</button><p class="tp-muted" role="status" data-test-message></p></form></section>'+
       '<section class="tp-card"><div class="tp-availability-header"><h3>Upcoming games & availability</h3>'+
       (weeks.length ? '<label class="tp-week-picker">Week <select data-week-select aria-label="Choose schedule week">'+
@@ -97,6 +127,7 @@
           ' · '+escape(item.start)+' to '+escape(item.end)+'</option>').join('')+'</select></label>' : '')+
       '</div><div data-week-games>'+(weeks.length ? weekGames(data,week) : '<p class="tp-muted">No games on the test schedule.</p>')+
       '</div><p class="tp-muted" role="status" data-availability-message></p></section>'+
+      '<section class="tp-card"><h3>Recent team results</h3>'+results(data)+'</section>'+
       '<section class="tp-card"><h3>Test profile</h3><p class="tp-muted">This page reads the separate database league. Your live CVHL profile and availability settings remain as they are.</p></section></div>' :
       '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>');
   }
@@ -160,13 +191,24 @@
       await save('availability',{game_id:select.dataset.testGame,status:choice},message);
       currentProfile.availability[select.dataset.testGame]=choice;
       select.dataset.savedStatus=choice;
-      select.className='availability-'+choice;
+      paintResponse(select);
     } catch(error) {
       select.value=previous;
+      paintResponse(select);
       message.textContent=error.message || 'Could not save.';
     } finally { select.disabled=false; }
   });
   panel.addEventListener('click',async event=>{
+    const quick=event.target.closest('[data-quick-game]');
+    if(quick){
+      const select=panel.querySelector('[data-test-game="'+quick.dataset.quickGame+'"]');
+      if(select && !select.disabled){
+        select.value=quick.dataset.quickStatus;
+        paintResponse(select);
+        select.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+      return;
+    }
     if(event.target.closest('[data-profile-login]'))await login();
     if(event.target.closest('[data-profile-refresh]'))await load();
     if(event.target.closest('[data-profile-logout]')){
