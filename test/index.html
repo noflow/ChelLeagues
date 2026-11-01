@@ -1816,7 +1816,7 @@
 <section class="score-bar" id="test-score-bar" aria-label="Game night matchups" hidden><div class="score-bar-inner"><div class="score-bar-heading"><strong id="test-score-heading">Game Night</strong><span id="test-score-date"></span></div><div class="score-bar-viewport" tabindex="0" aria-label="Game matchups; scroll to browse"><div class="score-bar-track" id="test-score-track"></div></div></div></section>
 <main>
   <div class="page active" id="page-home"><div class="section-title">Home</div><div id="home-content" class="loading">Loading test league…</div></div>
-  <div class="page" id="page-standings"><div class="section-title">Standings</div><p class="test-note">Test standings use wins, losses, and ties from final database games. League point rules are not active yet.</p><div class="standings-grid" id="standings-grid"></div></div>
+  <div class="page" id="page-standings"><div class="section-title">Standings</div><p class="test-note">Test standings use final games recorded in the test database.</p><div class="standings-grid" id="standings-grid"></div></div>
   <div class="page" id="page-players"><div class="section-title">Player Stats</div><div class="controls test-controls"><div class="search-box"><span class="search-icon">&#128269;</span><input id="player-search" type="search" placeholder="Search player…" aria-label="Search player"></div><span class="filter-label">Team:</span><select class="pos-filter" id="player-team"><option value="">All Teams</option></select><span class="record-count" id="player-count"></span></div><div class="table-wrap test-table-scroll" id="player-table-wrap"></div></div>
   <div class="page" id="page-goalies"><div class="section-title">Goalie Stats</div><p class="test-note">Goalie totals appear when goalie positions and game stats are recorded in the test database.</p><div class="table-wrap test-table-scroll" id="goalie-table-wrap"></div></div>
   <div class="page" id="page-teams"><div class="section-title">Team Rosters</div><div class="team-nav" id="team-nav"></div><div id="team-content"></div></div>
@@ -1906,16 +1906,17 @@
     select.addEventListener('change', id==='player-team' ? players : id==='game-team' ? games : schedule);
   }
   function standingsRows() {
-    const rows=new Map(data.teams.map(t=>[t.id,{...t,gp:0,w:0,l:0,t:0,gf:0,ga:0}]));
+    const rows=new Map(data.teams.map(t=>[t.id,{...t,gp:0,w:0,l:0,otl:0,t:0,pts:0,gf:0,ga:0}]));
     data.games.forEach(g=>{
       if(g.status!=='final'||g.home_score==null||g.away_score==null)return;
       const h=rows.get(g.home_team_id),a=rows.get(g.away_team_id);if(!h||!a)return;
       h.gp++;a.gp++;h.gf+=g.home_score;h.ga+=g.away_score;a.gf+=g.away_score;a.ga+=g.home_score;
       if(g.home_score===g.away_score){h.t++;a.t++}
-      else if(g.home_score>g.away_score){h.w++;a.l++}
-      else{a.w++;h.l++}
+      else if(g.home_score>g.away_score){h.w++;if(g.overtime)a.otl++;else a.l++}
+      else{a.w++;if(g.overtime)h.otl++;else h.l++}
     });
-    return [...rows.values()].sort((a,b)=>b.w-a.w||b.t-a.t||(b.gf-b.ga)-(a.gf-a.ga)||a.name.localeCompare(b.name));
+    rows.forEach(r=>{r.pts=r.w*2+r.otl});
+    return [...rows.values()].sort((a,b)=>b.pts-a.pts||b.w-a.w||(b.gf-b.ga)-(a.gf-a.ga)||a.name.localeCompare(b.name));
   }
   function standings() {
     const rows=standingsRows();
@@ -1924,7 +1925,7 @@
     const assigned=new Set(groups.flatMap(([,teams])=>teams.map(t=>t.id)));
     const others=rows.filter(r=>!assigned.has(r.id));
     if(others.length)groups.push(['OTHER TEAMS',others]);
-    $('standings-grid').innerHTML=groups.filter(([,teams])=>teams.length).map(([name,teams])=>'<div class="division-block"><div class="division-title"><span>&#9670;</span> '+safe(name)+'</div><div class="stand-table-wrap"><table class="stand-table"><thead><tr><th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>GF</th><th>GA</th></tr></thead><tbody>'+teams.map(r=>'<tr><td><button type="button" class="stand-team-link" data-team="'+safe(r.id)+'">'+logo(r,'stand-logo')+'<span class="stand-team-full">'+safe(r.name)+'</span><span class="stand-team-abbr">'+safe(r.abbr)+'</span></button></td><td>'+r.gp+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.t+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td></tr>').join('')+'</tbody></table></div></div>').join('');
+    $('standings-grid').innerHTML=groups.filter(([,teams])=>teams.length).map(([name,teams])=>'<div class="division-block"><div class="division-title"><span>&#9670;</span> '+safe(name)+'</div><div class="stand-table-wrap"><table class="stand-table"><thead><tr><th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>OTL</th><th>PTS</th><th>GF</th><th>GA</th></tr></thead><tbody>'+teams.map(r=>'<tr><td><button type="button" class="stand-team-link" data-team="'+safe(r.id)+'">'+logo(r,'stand-logo')+'<span class="stand-team-full">'+safe(r.name)+'</span><span class="stand-team-abbr">'+safe(r.abbr)+'</span></button></td><td>'+r.gp+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.otl+'</td><td class="pts-bold">'+r.pts+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td></tr>').join('')+'</tbody></table></div></div>').join('');
     $('standings-grid').querySelectorAll('[data-team]').forEach(b=>b.addEventListener('click',()=>openTeam(Number(b.dataset.team))));
   }
   function statsTable(rows, goalie=false) {
