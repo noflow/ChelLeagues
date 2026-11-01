@@ -1785,6 +1785,8 @@
 .test-table-scroll{overflow-x:auto}.test-empty{padding:30px;color:#b9cbe1}.test-team-roster{padding:22px;background:#101b2d;border:1px solid #284567;border-radius:10px}
 .test-roster-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:9px;margin-top:20px}
 .test-roster-player{padding:10px;background:#15304d;border-radius:7px;color:#f4f8ff}
+.test-player-link{border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;cursor:pointer;padding:0}.test-player-link:hover{text-decoration:underline}.test-player-link:focus-visible{outline:2px solid #46baf2;outline-offset:3px}
+.test-player-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px}.test-player-stat{background:#eef5fa;border-radius:8px;padding:14px;text-align:center;color:#12355f}.test-player-stat strong{display:block;font:800 24px Manrope,sans-serif}.test-player-stat span{font-size:12px;font-weight:700;text-transform:uppercase}
 .test-logo{width:34px;height:34px;object-fit:contain;vertical-align:middle;margin-right:8px}
 .test-game-score{font:800 26px Manrope,system-ui,sans-serif;color:#f4f8ff}
 .test-link{background:none;border:0;color:#f4f8ff;font:inherit;cursor:pointer;text-align:left}
@@ -1819,6 +1821,7 @@
   <div class="page" id="page-schedule"><div class="section-title">Schedule</div><div class="controls test-controls"><span class="filter-label">Team:</span><select class="pos-filter" id="schedule-team"><option value="">All Teams</option></select><span class="filter-label">Phase:</span><select class="pos-filter" id="schedule-phase"><option value="regular">Regular Season</option><option value="playoff">Playoffs</option></select><span class="record-count" id="schedule-count"></span></div><div id="schedule-list"></div></div>
   <div class="page" id="page-games"><div class="section-title">Recent Games</div><div class="controls test-controls"><span class="filter-label">Team:</span><select class="pos-filter" id="game-team"><option value="">All Teams</option></select><span class="record-count" id="game-count"></span></div><div id="games-list"></div></div>
 </main>
+<div class="modal-overlay" id="player-modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-name"><div class="modal-header"><div class="modal-name" id="modal-name"></div><div class="modal-meta" id="modal-meta"></div><button type="button" class="modal-close" id="modal-close" aria-label="Close player card">&#10005;</button></div><div class="modal-body" id="modal-body"></div></div></div>
 <footer>CVHL Database Test · Results on this site do not publish to the real CVHL website.</footer>
 <script>
 (() => {
@@ -1829,6 +1832,22 @@
   const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let data, currentTeam;
   const team = id => data.teams.find(t => t.id === id) || {name:'Team',abbr:'?'};
+  const playerLink = p => '<button type="button" class="test-player-link" data-player-index="'+data.players.indexOf(p)+'">'+safe(p.name)+'</button>';
+  let previousFocus;
+  function openPlayer(index) {
+    const p=data.players[index];if(!p)return;
+    previousFocus=document.activeElement;
+    $('modal-name').textContent=p.name;
+    $('modal-meta').innerHTML='<span>'+safe(team(p.team_id).name)+'</span><span>'+safe(p.position||'Player')+'</span>';
+    const stats=/^(g|goalie)$/i.test(p.position)||p.saves>0 ? [['Games',p.gp],['Saves',p.saves]] : [['Games',p.gp],['Goals',p.goals],['Assists',p.assists],['Points',p.points],['Shots',p.shots]];
+    $('modal-body').innerHTML='<div class="test-player-stats">'+stats.map(([label,value])=>'<div class="test-player-stat"><strong>'+safe(value??0)+'</strong><span>'+safe(label)+'</span></div>').join('')+'</div><p>Database test season totals</p>';
+    $('player-modal').classList.add('open');$('player-modal').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';$('modal-close').focus();
+  }
+  function closePlayer() { $('player-modal').classList.remove('open');$('player-modal').setAttribute('aria-hidden','true');document.body.style.overflow='';previousFocus?.focus(); }
+  document.addEventListener('click',e=>{const button=e.target.closest('[data-player-index]');if(button)openPlayer(Number(button.dataset.playerIndex));});
+  $('modal-close').addEventListener('click',closePlayer);
+  $('player-modal').addEventListener('click',e=>{if(e.target===$('player-modal'))closePlayer()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('player-modal').classList.contains('open'))closePlayer()});
   function logo(t, cls='test-logo') {
     const file = logos[t.abbr];
     return file ? '<img class="'+cls+'" src="../CVHL/images/'+encodeURIComponent(file)+'" alt="" loading="lazy">' : '<span class="badge">'+safe(t.abbr)+'</span>';
@@ -1872,7 +1891,7 @@
   function statsTable(rows, goalie=false) {
     if(!rows.length)return '<div class="test-empty">No '+(goalie?'goalie':'player')+' stats yet.</div>';
     const heads=goalie?['PLAYER','TEAM','GP','SAVES']:['PLAYER','TEAM','GP','G','A','PTS','SHOTS'];
-    return '<table class="stat-table"><thead><tr>'+heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(p=>'<tr><td>'+safe(p.name)+'</td><td>'+safe(team(p.team_id).abbr)+'</td><td>'+p.gp+'</td>'+(goalie?'<td>'+p.saves+'</td>':'<td>'+p.goals+'</td><td>'+p.assists+'</td><td>'+p.points+'</td><td>'+p.shots+'</td>')+'</tr>').join('')+'</tbody></table>';
+    return '<table class="stat-table"><thead><tr>'+heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(p=>'<tr><td>'+playerLink(p)+'</td><td>'+safe(team(p.team_id).abbr)+'</td><td>'+p.gp+'</td>'+(goalie?'<td>'+p.saves+'</td>':'<td>'+p.goals+'</td><td>'+p.assists+'</td><td>'+p.points+'</td><td>'+p.shots+'</td>')+'</tr>').join('')+'</tbody></table>';
   }
   function players() {
     const q=$('player-search').value.trim().toLowerCase(), id=$('player-team').value;
@@ -1890,7 +1909,7 @@
     const t=team(id);
     $('team-nav').querySelectorAll('button').forEach(b=>b.classList.toggle('active',Number(b.dataset.team)===id));
     const roster=data.players.filter(p=>p.team_id===id).sort((a,b)=>a.name.localeCompare(b.name));
-    $('team-content').innerHTML='<div class="team-banner">'+logo(t,'team-banner-logo')+'<span class="team-banner-name">'+safe(t.name)+'</span></div><div class="test-team-roster"><h2>'+safe(t.abbr)+' Roster</h2><div class="test-roster-list">'+roster.map(p=>'<div class="test-roster-player">'+safe(p.name)+(p.position?' · '+safe(p.position):'')+'</div>').join('')+'</div></div>';
+    $('team-content').innerHTML='<div class="team-banner">'+logo(t,'team-banner-logo')+'<span class="team-banner-name">'+safe(t.name)+'</span></div><div class="test-team-roster"><h2>'+safe(t.abbr)+' Roster</h2><div class="test-roster-list">'+roster.map(p=>'<div class="test-roster-player">'+playerLink(p)+(p.position?' · '+safe(p.position):'')+'</div>').join('')+'</div></div>';
     const nav=document.querySelector('#main-nav [data-page="teams"]');page('teams',nav);
   }
   function teams() {
@@ -1922,7 +1941,7 @@
   }
   function leaders(title,players,key) {
     const top=[...players].filter(p=>p[key]>0).sort((a,b)=>b[key]-a[key]).slice(0,5);
-    return '<div class="leader-card"><div class="leader-card-title">'+safe(title)+'</div><div class="leader-list">'+(top.length?top.map((p,i)=>'<div class="leader-row"><div class="leader-rank">'+(i+1)+'</div>'+logo(team(p.team_id),'leader-logo')+'<div><div class="leader-name">'+safe(p.name)+'</div><div class="leader-team">'+safe(team(p.team_id).abbr)+'</div></div><div class="leader-value">'+p[key]+'</div></div>').join(''):'<div class="leader-empty">No data yet</div>')+'</div></div>';
+    return '<div class="leader-card"><div class="leader-card-title">'+safe(title)+'</div><div class="leader-list">'+(top.length?top.map((p,i)=>'<div class="leader-row"><div class="leader-rank">'+(i+1)+'</div>'+logo(team(p.team_id),'leader-logo')+'<div><div class="leader-name">'+playerLink(p)+'</div><div class="leader-team">'+safe(team(p.team_id).abbr)+'</div></div><div class="leader-value">'+p[key]+'</div></div>').join(''):'<div class="leader-empty">No data yet</div>')+'</div></div>';
   }
   function home() {
     const played=data.games.filter(g=>g.status==='final').length;
