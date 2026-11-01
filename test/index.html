@@ -1782,7 +1782,7 @@
 .filter-label,.record-count{color:#b9cbe1}
 .test-banner{background:#12355f;color:#f4f8ff;border-bottom:2px solid #219ee8;padding:10px 24px;font:700 12px Manrope,system-ui,sans-serif;letter-spacing:.08em;text-align:center}
 .test-banner a{color:#77d7ff}.test-note{color:#b9cbe1;line-height:1.5;margin:12px 0 22px}
-.test-table-scroll{overflow-x:auto}.test-empty{padding:30px;color:#b9cbe1}.test-team-roster{padding:22px;background:#101b2d;border:1px solid #284567;border-radius:10px}
+.test-table-scroll{overflow-x:auto}.test-empty{padding:30px;color:#b9cbe1}.test-team-table-scroll{overflow-x:auto;background:#fff;border:1px solid #dbe6f2;margin-bottom:16px}.test-team-table{min-width:100%;white-space:nowrap}.test-team-table th:first-child,.test-team-table td:first-child{position:sticky;left:0;z-index:1;background:#fff;min-width:160px}.test-team-table th:first-child{z-index:2}.test-team-table .test-player-link{color:#153b65}.test-team-table td,.test-team-table th{padding:9px 12px}.team-management-name{font-size:15px}.test-empty{background:#fff;margin:0 0 16px}\n.test-team-roster{padding:22px;background:#101b2d;border:1px solid #284567;border-radius:10px}
 .test-roster-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:9px;margin-top:20px}
 .test-roster-player{padding:10px;background:#15304d;border-radius:7px;color:#f4f8ff}
 .test-player-link{border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;cursor:pointer;padding:0}.test-player-link:hover{text-decoration:underline}.test-player-link:focus-visible{outline:2px solid #46baf2;outline-offset:3px}
@@ -1948,12 +1948,40 @@
     const rows=data.players.filter(p=>p.goalie?.games_played>0||/^(g|goalie)$/i.test(p.position)||p.saves>0).sort((a,b)=>(b.goalie?.saves||0)-(a.goalie?.saves||0)||a.name.localeCompare(b.name));
     $('goalie-table-wrap').innerHTML=statsTable(rows,true);
   }
+  function teamRosterTable(rows, goalie=false) {
+    if (!rows.length) return '<p class="test-empty">No rostered '+(goalie?'goalies':'skaters')+' yet.</p>';
+    const fields = goalie
+      ? [['GP','games_played'],['W','wins'],['L','losses'],['OTL','overtime_losses'],['GA','goals_against'],['GAA','gaa'],['Saves','saves'],['SA','shots_against'],['SV%','save_pct'],['Shutouts','shutouts']]
+      : statSections.skater.flatMap(section=>section[1]);
+    return '<div class="test-team-table-scroll"><table class="stat-table test-team-table"><thead><tr><th>Username</th><th>Position</th>'+fields.map(([label])=>'<th>'+safe(label)+'</th>').join('')+'</tr></thead><tbody>'+
+      rows.map(p=>{
+        const stats=goalie?p.goalie:p.skater;
+        return '<tr><td>'+playerLink(p)+'</td><td>'+safe(stats?.position||p.position||'–')+'</td>'+
+          fields.map(([,key])=>'<td>'+safe(stats?.[key]??(key==='games_played'?p.gp:undefined)??'–')+'</td>').join('')+'</tr>';
+      }).join('')+'</tbody></table></div>';
+  }
   function openTeam(id) {
     currentTeam=id;
     const t=team(id);
     $('team-nav').querySelectorAll('button').forEach(b=>b.classList.toggle('active',Number(b.dataset.team)===id));
     const roster=data.players.filter(p=>p.team_id===id).sort((a,b)=>a.name.localeCompare(b.name));
-    $('team-content').innerHTML='<div class="team-banner">'+logo(t,'team-banner-logo')+'<span class="team-banner-name">'+safe(t.name)+'</span></div><div class="test-team-roster"><h2>'+safe(t.abbr)+' Roster</h2><div class="test-roster-list">'+roster.map(p=>'<div class="test-roster-player">'+playerLink(p)+(p.position?' · '+safe(p.position):'')+'</div>').join('')+'</div></div>';
+    const goalies=roster.filter(p=>/^(g|goalie)$/i.test(p.position)||p.goalie?.games_played>0);
+    const skaters=roster.filter(p=>!goalies.includes(p));
+    const games=data.games.filter(g=>g.status==='final'&&(g.home_team_id===id||g.away_team_id===id));
+    const wins=games.filter(g=>(g.home_team_id===id?g.home_score:g.away_score)>(g.home_team_id===id?g.away_score:g.home_score)).length;
+    const losses=games.filter(g=>(g.home_team_id===id?g.home_score:g.away_score)<(g.home_team_id===id?g.away_score:g.home_score)).length;
+    const gf=games.reduce((n,g)=>n+Number(g.home_team_id===id?g.home_score:g.away_score),0);
+    const ga=games.reduce((n,g)=>n+Number(g.home_team_id===id?g.away_score:g.home_score),0);
+    const roles=['owner','gm','agm'];
+    const management=roles.map(role=>{
+      const people=(data.team_management||[]).filter(r=>r.team_id===id&&r.role===role).map(r=>r.name).join(', ');
+      return '<div class="team-management-card"><div class="team-management-role">'+role.toUpperCase()+'</div><div class="team-management-name">'+safe(people||'Not assigned')+'</div></div>';
+    }).join('');
+    $('team-content').innerHTML='<div class="team-banner"><div class="team-banner-main">'+logo(t,'team-banner-logo')+
+      '<div><div class="team-banner-name">'+safe(t.name)+'</div><div class="team-banner-record">'+wins+'-'+losses+'-0 | '+(wins*2)+' PTS | GF '+gf+' | GA '+ga+'</div></div></div></div>'+
+      '<div class="team-management">'+management+'</div>'+
+      '<div class="subsection-label">Rostered Skaters <span class="subsection-note">'+skaters.length+' players</span></div>'+teamRosterTable(skaters)+
+      '<div class="subsection-label">Rostered Goalies <span class="subsection-note">'+goalies.length+' players</span></div>'+teamRosterTable(goalies,true);
     const nav=document.querySelector('#main-nav [data-page="teams"]');page('teams',nav);
   }
   function teams() {
