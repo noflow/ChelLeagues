@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#081426">
+<title>CVHL Database Test | Chel Leagues</title>
+<link rel="icon" href="../assets/chel-leagues-icon.png">
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#07111f;color:#f4f8ff}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 85% 0%,#164067 0,transparent 32%),#07111f}
+a{color:inherit}button,select{font:inherit}header{border-bottom:1px solid #29435e;background:#09192b}
+.wrap{max-width:1180px;margin:auto;padding:0 22px}header .wrap{min-height:74px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{text-decoration:none;font-weight:900;letter-spacing:.04em;font-size:21px}.brand span{color:#4bd4ff}
+header a:last-child{font-size:14px;color:#b7cee6}.hero{padding:54px 0 27px}
+.eyebrow{color:#63d7ff;font-size:12px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}
+h1{font-size:clamp(36px,6vw,64px);letter-spacing:-.045em;line-height:1;margin:13px 0}
+.hero p{color:#b7cee6;max-width:660px;line-height:1.55}.tag{display:inline-block;background:#143a58;color:#92e4ff;border:1px solid #397b9e;border-radius:100px;padding:6px 11px;font-size:12px;font-weight:800}
+nav{display:flex;gap:8px;overflow:auto;border-bottom:1px solid #29435e;padding:10px 0 18px}
+nav button{border:1px solid #35536e;background:#10273c;color:#c6d9ed;border-radius:9px;padding:10px 16px;cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{background:#1b638a;border-color:#60d6ff;color:#fff}
+main{padding:22px 0 60px}section[hidden]{display:none}h2{font-size:25px;margin:12px 0 18px}.muted{color:#a8bfd5}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:13px}.card{background:#102337;border:1px solid #2b4a65;border-radius:14px;padding:18px}
+.card h3{margin:0 0 8px;font-size:18px}.card p{margin:5px 0;color:#b7cee6}.score{font-size:26px;font-weight:900;color:#fff}
+table{width:100%;border-collapse:collapse;background:#102337;border-radius:12px;overflow:hidden}th,td{padding:12px;text-align:left;border-bottom:1px solid #29435e}th{color:#b7cee6;font-size:12px;text-transform:uppercase;letter-spacing:.07em}tr:last-child td{border:0}
+.table-scroll{overflow:auto;border-radius:12px}.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 20px}
+select{background:#122d46;color:#fff;border:1px solid #426482;border-radius:8px;padding:8px}
+footer{border-top:1px solid #29435e;padding:25px 0 45px;color:#9eb6cd;font-size:13px}
+@media(max-width:600px){header .wrap{min-height:65px}.brand{font-size:17px}.hero{padding-top:35px}.table-scroll{font-size:14px}th,td{padding:10px 8px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="../">CHEL <span>LEAGUES</span></a><a href="../">All leagues</a></div></header>
+<div class="wrap">
+  <div class="hero"><span class="tag">DATABASE TEST LEAGUE</span><div class="eyebrow" style="margin-top:18px">Separate test website</div><h1 id="league-name">CVHL Database Test</h1><p>Schedule, standings, teams, and player stats from the private database test league. Results here are for testing and do not publish to the real CVHL site.</p><p id="season" class="muted"></p></div>
+  <nav aria-label="Test league pages">
+    <button type="button" data-tab="schedule" aria-selected="true">Schedule</button>
+    <button type="button" data-tab="standings" aria-selected="false">Standings</button>
+    <button type="button" data-tab="teams" aria-selected="false">Teams</button>
+    <button type="button" data-tab="players" aria-selected="false">Players</button>
+  </nav>
+  <main>
+    <p id="status" role="status">Loading test league…</p>
+    <section id="schedule"><h2>Games</h2><div class="controls"><label>Show <select id="game-filter"><option value="upcoming">Upcoming</option><option value="results">Results</option><option value="all">All games</option></select></label></div><div id="games" class="cards"></div></section>
+    <section id="standings" hidden><h2>Standings</h2><p class="muted">Wins, losses, and ties from final database games. League point rules are not applied yet.</p><div id="standings-table" class="table-scroll"></div></section>
+    <section id="teams" hidden><h2>Teams & rosters</h2><div id="team-list" class="cards"></div></section>
+    <section id="players" hidden><h2>Player totals</h2><div id="player-table" class="table-scroll"></div></section>
+  </main>
+</div>
+<footer><div class="wrap">Chel Leagues · Database test site</div></footer>
+<script>
+(() => {
+  'use strict';
+  const endpoint = 'https://admin.chelleagues.com/api/database-test/cvhl';
+  const byId = id => document.getElementById(id);
+  let data;
+  function el(tag, text, className) {
+    const node = document.createElement(tag);
+    if (text !== undefined) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+  function empty(parent, message) {
+    parent.replaceChildren(el('p', message, 'muted'));
+  }
+  function table(parent, columns, rows) {
+    const t = el('table'), head = el('thead'), body = el('tbody'), hr = el('tr');
+    columns.forEach(c => hr.append(el('th', c)));
+    head.append(hr);
+    rows.forEach(row => {
+      const tr = el('tr');
+      row.forEach(value => tr.append(el('td', String(value ?? ''))));
+      body.append(tr);
+    });
+    t.append(head, body);
+    parent.replaceChildren(t);
+  }
+  function show(tab) {
+    document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+    document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== tab);
+  }
+  document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => show(b.dataset.tab)));
+  const team = id => data.teams.find(t => t.id === id) || {name: 'Team', abbr: '?'};
+  const time = date => new Intl.DateTimeFormat('en-CA', {timeZone: data.league.timezone, dateStyle: 'medium', timeStyle: 'short'}).format(new Date(date));
+  function games() {
+    const mode = byId('game-filter').value;
+    let items = data.games.filter(g => mode === 'all' || (mode === 'results' ? g.status === 'final' : g.status !== 'final' && g.status !== 'cancelled'));
+    items.sort((a,b) => mode === 'results' ? b.starts_at.localeCompare(a.starts_at) : a.starts_at.localeCompare(b.starts_at));
+    const parent = byId('games'); parent.replaceChildren();
+    if (!items.length) return empty(parent, mode === 'results' ? 'No final games yet.' : 'No upcoming games.');
+    items.forEach(g => {
+      const card = el('article', undefined, 'card');
+      card.append(el('p', time(g.starts_at) + ' · ' + g.phase));
+      card.append(el('h3', team(g.home_team_id).name + ' vs ' + team(g.away_team_id).name));
+      card.append(el('p', g.status === 'final' ? g.home_score + ' – ' + g.away_score : g.status, g.status === 'final' ? 'score' : 'muted'));
+      parent.append(card);
+    });
+  }
+  byId('game-filter').addEventListener('change', games);
+  function standings() {
+    const rows = new Map(data.teams.map(t => [t.id,{team:t,gp:0,w:0,l:0,t:0,gf:0,ga:0}]));
+    data.games.filter(g => g.status === 'final' && g.home_score != null && g.away_score != null).forEach(g => {
+      const h=rows.get(g.home_team_id), a=rows.get(g.away_team_id);
+      if (!h || !a) return;
+      h.gp++; a.gp++; h.gf+=g.home_score; h.ga+=g.away_score; a.gf+=g.away_score; a.ga+=g.home_score;
+      if (g.home_score===g.away_score){h.t++;a.t++}
+      else if(g.home_score>g.away_score){h.w++;a.l++}
+      else{a.w++;h.l++}
+    });
+    const sorted=[...rows.values()].sort((a,b)=>b.w-a.w||b.t-a.t||(b.gf-b.ga)-(a.gf-a.ga)||a.team.name.localeCompare(b.team.name));
+    table(byId('standings-table'), ['Team','GP','W','L','T','GF','GA'],
+      sorted.map(r=>[r.team.name,r.gp,r.w,r.l,r.t,r.gf,r.ga]));
+  }
+  function teams() {
+    const parent=byId('team-list'); parent.replaceChildren();
+    if (!data.teams.length) return empty(parent,'No teams yet.');
+    data.teams.forEach(t => {
+      const card=el('article',undefined,'card');
+      card.append(el('h3',t.name + ' (' + t.abbr + ')'));
+      const roster=data.players.filter(p=>p.team_id===t.id);
+      card.append(el('p',roster.length + ' roster players'));
+      roster.forEach(p=>card.append(el('p',p.name + (p.position ? ' · '+p.position : ''))));
+      parent.append(card);
+    });
+  }
+  function players() {
+    const sorted=[...data.players].sort((a,b)=>b.points-a.points||b.goals-a.goals||a.name.localeCompare(b.name));
+    if (!sorted.length) return empty(byId('player-table'),'No roster players yet.');
+    table(byId('player-table'),['Player','Team','GP','G','A','PTS','Shots','Saves'],
+      sorted.map(p=>[p.name,team(p.team_id).abbr,p.gp,p.goals,p.assists,p.points,p.shots,p.saves]));
+  }
+  fetch(endpoint, {credentials:'omit',cache:'no-store'}).then(r => {
+    if (!r.ok) throw new Error('Database test feed unavailable (' + r.status + ')');
+    return r.json();
+  }).then(result => {
+    data=result;
+    byId('league-name').textContent=data.league.name;
+    byId('season').textContent=data.season ? data.season.name + ' · Eastern time' : 'Season setup in progress';
+    byId('status').hidden=true;
+    games(); standings(); teams(); players();
+  }).catch(err => {byId('status').textContent='Could not load the test league. ' + err.message;});
+})();
+</script>
+</body>
+</html>
