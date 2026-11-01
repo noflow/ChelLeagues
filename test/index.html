@@ -2006,7 +2006,182 @@
     const selected=data.stat_views?.[view];
     return Array.isArray(selected)?selected.filter(key=>available.has(key)).map(key=>[available.get(key),key]):defaults;
   }
-  const money = value => value == null ? '–' : '
+  const money = value => value == null ? '–' : '$'+Number(value).toLocaleString('en-US');
+  function teamRosterTable(rows, goalie=false) {
+    if (!rows.length) return '<p class="test-empty">No rostered '+(goalie?'goalies':'skaters')+' yet.</p>';
+    const fields = goalie
+      ? configuredFields('team_goalies',goalieCatalog.slice(0,9),goalieCatalog)
+      : configuredFields('team_skaters',rosterSkaterFields,rosterSkaterFields);
+    const salaryColumn = data.salary_cap != null;
+    return '<div class="test-team-table-scroll"><table class="stat-table test-team-table"><thead><tr><th>Username</th>'+
+      (salaryColumn?'<th>Salary</th>':'')+'<th>Position</th>'+
+      fields.map(([label])=>'<th>'+safe(label)+'</th>').join('')+'</tr></thead><tbody>'+
+      rows.map(p=>{
+        const stats=goalie?p.goalie:p.skater;
+        return '<tr><td>'+playerLink(p)+'</td>'+
+          (salaryColumn?'<td class="roster-salary">'+safe(money(p.salary))+'</td>':'')+
+          '<td>'+safe(stats?.position||p.position||'–')+'</td>'+
+          fields.map(([,key])=>'<td>'+safe(stats?.[key]??(key==='games_played'?p.gp:undefined)??'–')+'</td>').join('')+'</tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  function openTeam(id) {
+    currentTeam=id;
+    const t=team(id);
+    const [base,accent]=teamColors[t.abbr]||['#12355f','#46baf2'];
+    const area=$('team-content');
+    area.style.setProperty('--team-base',base);
+    area.style.setProperty('--team-accent',accent);
+    area.style.setProperty('--team-logo',logos[t.abbr]?'url("../CVHL/images/'+encodeURIComponent(logos[t.abbr])+'")':'none');
+    $('team-nav').querySelectorAll('button').forEach(b=>b.classList.toggle('active',Number(b.dataset.team)===id));
+    const roster=data.players.filter(p=>p.team_id===id).sort((a,b)=>a.name.localeCompare(b.name));
+    const goalies=roster.filter(p=>/^(g|goalie)$/i.test(p.position)||p.goalie?.games_played>0);
+    const skaters=roster.filter(p=>!goalies.includes(p));
+    const games=data.games.filter(g=>g.status==='final'&&(g.home_team_id===id||g.away_team_id===id));
+    const wins=games.filter(g=>(g.home_team_id===id?g.home_score:g.away_score)>(g.home_team_id===id?g.away_score:g.home_score)).length;
+    const losses=games.filter(g=>(g.home_team_id===id?g.home_score:g.away_score)<(g.home_team_id===id?g.away_score:g.home_score)).length;
+    const gf=games.reduce((n,g)=>n+Number(g.home_team_id===id?g.home_score:g.away_score),0);
+    const ga=games.reduce((n,g)=>n+Number(g.home_team_id===id?g.away_score:g.home_score),0);
+    const roles=['owner','gm','agm'];
+    const salaryKnown=roster.every(p=>p.salary!=null);
+    const capRemaining=t.cap_remaining!=null?money(t.cap_remaining):(salaryKnown&&data.salary_cap!=null?money(data.salary_cap-roster.reduce((sum,p)=>sum+Number(p.salary),0)):'–');
+    const management=roles.map(role=>{
+      const people=(data.team_management||[]).filter(r=>r.team_id===id&&r.role===role).map(r=>r.name).join(', ');
+      return '<div class="team-management-card"><div class="team-management-role">'+role.toUpperCase()+'</div><div class="team-management-name">'+safe(people||'Not assigned')+'</div></div>';
+    }).join('');
+    $('team-content').innerHTML='<div class="team-banner"><div class="team-banner-main">'+logo(t,'team-banner-logo')+
+      '<div><div class="team-banner-name">'+safe(t.name)+'</div><div class="team-banner-record">'+wins+'-'+losses+'-0 | '+(wins*2)+' PTS | GF '+gf+' | GA '+ga+'</div></div></div>'+
+      (data.salary_cap!=null?'<div class="team-banner-cap"><div class="team-banner-cap-label">Cap Remaining</div><div class="team-banner-cap-value">'+safe(capRemaining)+'</div></div>':'')+'</div>'+
+      '<div class="team-management">'+management+'</div>'+
+      '<div class="subsection-label">Rostered Skaters <span class="subsection-note">'+skaters.length+' players</span></div>'+teamRosterTable(skaters)+
+      '<div class="subsection-label">Rostered Goalies <span class="subsection-note">'+goalies.length+' players</span></div>'+teamRosterTable(goalies,true);
+    const nav=document.querySelector('#main-nav [data-page="teams"]');page('teams',nav);
+  }
+  function teams() {
+    $('team-nav').innerHTML=data.teams.map(t=>'<button type="button" class="team-btn" data-team="'+safe(t.id)+'">'+logo(t,'team-btn-logo')+safe(t.abbr)+'</button>').join('');
+    $('team-nav').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>openTeam(Number(b.dataset.team))));
+    if(data.teams.length){currentTeam=data.teams[0].id;openTeam(currentTeam);page('home',document.querySelector('#main-nav [data-page="home"]'))}
+    else $('team-content').innerHTML='<div class="loading">No teams yet.</div>';
+  }
+  function gameCard(g, result=false) {
+    const away=team(g.away_team_id),home=team(g.home_team_id);
+    return '<div class="game-card" data-game-id="'+safe(g.id)+'" tabindex="0" role="button" aria-label="View '+safe(away.name)+' vs '+safe(home.name)+' game details"><div class="game-date">'+safe(time(g.starts_at))+'</div><div class="game-teams"><div class="game-team">'+logo(away,'game-team-logo')+'<div class="game-team-name">'+safe(away.name)+'</div><div class="game-badge"><span class="badge">AWAY</span></div></div><div class="game-score-wrap"><div class="'+(result?'test-game-score':'game-sep')+'">'+(result?g.away_score+' – '+g.home_score:'@')+'</div></div><div class="game-team">'+logo(home,'game-team-logo')+'<div class="game-team-name">'+safe(home.name)+'</div><div class="game-badge"><span class="badge">HOME</span></div></div></div><div class="game-card-actions"><span class="badge">'+safe(g.phase)+'</span></div></div>';
+  }
+  function grouped(items, results=false) {
+    if(!items.length)return '<div class="loading">No '+(results?'final games':'scheduled games')+' yet.</div>';
+    const groups=new Map();
+    items.forEach(g=>{const key=date(g.starts_at);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(g)});
+    return [...groups].map(([key,games])=>'<div class="date-group"><div class="date-header">'+safe(key)+'</div><div class="games-grid">'+games.map(g=>gameCard(g,results)).join('')+'</div></div>').join('');
+  }
+  function schedule() {
+    const id=$('schedule-team').value,phase=$('schedule-phase').value;
+    const items=data.games.filter(g=>g.status!=='final'&&g.status!=='cancelled'&&g.phase===phase&&(!id||String(g.home_team_id)===id||String(g.away_team_id)===id)).sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
+    $('schedule-count').textContent=items.length+' games';$('schedule-list').innerHTML=grouped(items);
+  }
+  $('schedule-phase').addEventListener('change',schedule);
+  function games() {
+    const id=$('game-team').value;
+    const items=data.games.filter(g=>g.status==='final'&&(!id||String(g.home_team_id)===id||String(g.away_team_id)===id)).sort((a,b)=>b.starts_at.localeCompare(a.starts_at));
+    $('game-count').textContent=items.length+' games';$('games-list').innerHTML=grouped(items,true);
+  }
+  function leaders(title,players,keys,order='desc',format=value=>String(value),kind='skater') {
+    const value=p=>{const stats=p[kind];if(!stats)return NaN;for(const key of keys){if(stats[key]!==undefined&&stats[key]!==null&&stats[key]!=='')return parseFloat(stats[key])}return NaN};
+    const top=[...players].filter(p=>p[kind]?.games_played>0&&Number.isFinite(value(p))).sort((a,b)=>order==='asc'?value(a)-value(b):value(b)-value(a)).slice(0,5);
+    return '<div class="leader-card"><div class="leader-card-title">'+safe(title)+'</div><div class="leader-list">'+(top.length?top.map((p,i)=>'<div class="leader-row"><div class="leader-rank">'+(i+1)+'</div>'+logo(team(p.team_id),'leader-logo')+'<div><div class="leader-name">'+playerLink(p)+'</div><div class="leader-team">'+safe(team(p.team_id).abbr)+'</div></div><div class="leader-value">'+safe(format(value(p)))+'</div></div>').join(''):'<div class="leader-empty">No recorded stats yet</div>')+'</div></div>';
+  }
+  function gameCarousel() {
+    const finals=data.games.filter(g=>g.status==='final'&&g.home_score!=null&&g.away_score!=null).sort((a,b)=>b.starts_at.localeCompare(a.starts_at));
+    const upcoming=data.games.filter(g=>g.status==='scheduled'&&new Date(g.starts_at)>=new Date()).sort((a,b)=>a.starts_at.localeCompare(b.starts_at));
+    const selected=finals.length?finals:upcoming;
+    const bar=$('test-score-bar');
+    if(!selected.length){bar.hidden=true;return}
+    const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(selected[0].starts_at));
+    const night=selected.filter(g=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(g.starts_at))===day);
+    $('test-score-heading').textContent=finals.length?'Latest Game Night':'Next Game Night';
+    $('test-score-date').textContent=date(selected[0].starts_at);
+    $('test-score-track').innerHTML='<div class="score-bar-group">'+night.map(g=>{
+      const away=team(g.away_team_id),home=team(g.home_team_id);
+      const line=(t,score)=>'<span class="score-bar-team">'+logo(t,'score-bar-logo')+'<span>'+safe(t.abbr)+'</span><b>'+safe(score??'–')+'</b></span>';
+      return '<button type="button" class="score-bar-card test-score-button" data-game-id="'+safe(g.id)+'"><span class="score-bar-status">'+safe(g.status==='final'?'FINAL':time(g.starts_at)+' ET')+'</span>'+line(away,g.away_score)+line(home,g.home_score)+'</button>';
+    }).join('')+'</div>';
+    bar.hidden=false;
+  }
+  function openGame(id) {
+    const g=data.games.find(item=>String(item.id)===String(id));if(!g)return;
+    const away=team(g.away_team_id),home=team(g.home_team_id);
+    $('game-info-title').textContent=away.name+' vs '+home.name;
+    const rows=(data.game_player_stats||[]).filter(s=>s.game_id===g.id);
+    const boxes=rows.length?[['Skaters','skater',['Goals','Assists','Shots','Hits','Plus Minus']],['Goalies','goalie',['Saves','Shots Against','Goals Against']]].map(([title,kind,columns])=>{
+      const subset=rows.filter(s=>s.kind===kind);
+      if(!subset.length)return '';
+      return '<h3>'+title+'</h3><div class="test-table-scroll"><table class="stat-table"><thead><tr><th>PLAYER</th><th>TEAM</th>'+columns.map(col=>'<th>'+safe(col)+'</th>').join('')+'</tr></thead><tbody>'+subset.map(s=>{
+        const player=data.players.find(p=>p.id===s.player_id),values=s.stats||{};
+        return '<tr><td>'+(player?playerLink(player):safe(values.Username||'Player'))+'</td><td>'+safe(team(s.team_id).abbr)+'</td>'+columns.map(col=>'<td>'+safe(values[col]??'–')+'</td>').join('')+'</tr>';
+      }).join('')+'</tbody></table></div>';
+    }).join(''):'<p>No player box score recorded for this game yet.</p>';
+    $('game-info-body').innerHTML='<p><strong>'+safe(date(g.starts_at))+' · '+safe(time(g.starts_at))+' ET</strong></p><p>'+safe(g.status==='final'?'Final score: '+g.away_score+'–'+g.home_score:'Scheduled game')+' · '+safe(g.phase)+'</p>'+boxes;
+    $('game-info-modal').classList.add('open');$('game-info-modal').setAttribute('aria-hidden','false');$('game-info-close').focus();
+  }
+  document.addEventListener('click',e=>{const game=e.target.closest('[data-game-id]');if(game)openGame(game.dataset.gameId)});
+  document.addEventListener('keydown',e=>{const game=e.target.closest('[data-game-id]');if(game&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openGame(game.dataset.gameId)}});
+  $('game-info-close').addEventListener('click',()=>{ $('game-info-modal').classList.remove('open');$('game-info-modal').setAttribute('aria-hidden','true'); });
+  $('game-info-modal').addEventListener('click',e=>{if(e.target===$('game-info-modal'))$('game-info-close').click()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('game-info-modal').classList.contains('open'))$('game-info-close').click()});
+  const homeCardDefinitions={
+    goals:['Top Goal Scorers','skater','desc',v=>String(v)],
+    assists:['Top Assists','skater','desc',v=>String(v)],
+    plus_minus:['Plus / Minus','skater','desc',v=>String(v)],
+    hits:['Hits','skater','desc',v=>String(v)],
+    interceptions:['Interceptions','skater','desc',v=>String(v)],
+    takeaways:['Takeaways','skater','desc',v=>String(v)],
+    points:['Points','skater','desc',v=>String(v)],
+    shots:['Shots','skater','desc',v=>String(v)],
+    saves:['Goalies: Saves','goalie','desc',v=>String(v)],
+    gaa:['Goalies: GAA','goalie','asc',v=>v.toFixed(2)],
+    save_pct:['Goalies: Save %','goalie','desc',v=>v.toFixed(1)+'%']
+  };
+  function homeCards(){
+    const defaults=['goals','assists','plus_minus','hits','interceptions','takeaways','gaa','save_pct'];
+    const keys=Array.isArray(data.stat_views?.home_top5)?data.stat_views.home_top5:defaults;
+    return keys.filter(key=>homeCardDefinitions[key]).map(key=>{
+      const [label,kind,order,format]=homeCardDefinitions[key];
+      const pool=kind==='goalie'?data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0):data.players;
+      return leaders(label,pool,[key],order,format,kind);
+    }).join('');
+  }
+  function home() {
+    const played=data.games.filter(g=>g.status==='final').length;
+    $('home-content').innerHTML='<section class="home-hero"><div><div class="home-title">CVHL Database Test</div><div class="home-subtitle">'+safe(data.season?.name||'Season setup in progress')+'</div></div><div class="home-intro">This is the database test copy of CVHL. Schedule and stats here are separate from the real CVHL website.</div></section><section class="home-metrics"><div class="home-metric"><div class="home-metric-value">'+data.teams.length+'</div><div class="home-metric-label">Teams</div></div><div class="home-metric"><div class="home-metric-value">'+played+'</div><div class="home-metric-label">Games Played</div></div><div class="home-metric"><div class="home-metric-value">'+data.players.length+'</div><div class="home-metric-label">Players</div></div></section><section class="leader-grid">'+homeCards()+'</section>';
+  }
+  async function loadFeed() {
+    for (let attempt=0; attempt<3; attempt++) {
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),12000);
+      try {
+        const response=await fetch(endpoint,{credentials:'omit',cache:'no-store',signal:controller.signal});
+        if(!response.ok)throw Error('Feed unavailable ('+response.status+')');
+        return await response.json();
+      } catch(error) {
+        if(attempt===2)throw error.name==='AbortError'?Error('The database feed timed out. Please retry.'):error;
+      } finally { clearTimeout(timer); }
+    }
+  }
+  function retryFeed() {
+    $('home-content').innerHTML='<div class="loading">Loading test league…</div>';
+    loadFeed().then(result=>{
+    data=result;
+    const projected=new Map((data.published_player_stats||[]).map(s=>[s.player_id+':'+s.phase+':'+s.kind,s]));
+    data.players.forEach(p=>{p.skater=projected.get(p.id+':regular:skater');p.goalie=projected.get(p.id+':regular:goalie');p.playoff_skater=projected.get(p.id+':playoff:skater');p.playoff_goalie=projected.get(p.id+':playoff:goalie');});
+    choices('player-team');choices('schedule-team');choices('game-team');
+    standings();players();goalies();teams();schedule();games();home();gameCarousel();
+    const target=location.hash.slice(1);
+    if(['home','standings','players','goalies','teams','schedule','games'].includes(target))page(target,document.querySelector('#main-nav [data-page="'+target+'"]'));
+  }).catch(e=>{$('home-content').innerHTML='<div class="loading">Could not load database test data: '+safe(e.message)+'<br><button type="button" id="retry-test-feed">Retry database connection</button></div>'; $('retry-test-feed').addEventListener('click',retryFeed);});
+  }
+  retryFeed();
+})();
+</script>
+</body>
+</html>+Number(value).toLocaleString('en-US');
   function teamRosterTable(rows, goalie=false) {
     if (!rows.length) return '<p class="test-empty">No rostered '+(goalie?'goalies':'skaters')+' yet.</p>';
     const fields = goalie
