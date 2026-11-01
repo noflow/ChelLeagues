@@ -1788,7 +1788,7 @@
 .test-player-link{border:0;background:none;color:inherit;font:inherit;font-weight:700;text-align:left;cursor:pointer;padding:0}.test-player-link:hover{text-decoration:underline}.test-player-link:focus-visible{outline:2px solid #46baf2;outline-offset:3px}
 .test-player-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:10px}.test-player-stat{background:#eef5fa;border-radius:8px;padding:14px;text-align:center;color:#12355f}.test-player-stat strong{display:block;font:800 24px Manrope,sans-serif}.test-player-stat span{font-size:12px;font-weight:700;text-transform:uppercase}
 .test-logo{width:34px;height:34px;object-fit:contain;vertical-align:middle;margin-right:8px}
-.test-score-button{font:inherit;text-align:left;background:transparent;border-top:0;border-right:0;border-bottom:0;cursor:pointer}.test-score-button .score-bar-team{width:100%}
+.game-card[data-game-id]{cursor:pointer}.game-card[data-game-id]:focus-visible{outline:2px solid #46baf2}.test-score-button{font:inherit;text-align:left;background:transparent;border-top:0;border-right:0;border-bottom:0;cursor:pointer}.test-score-button .score-bar-team{width:100%}
 .test-game-score{font:800 26px Manrope,system-ui,sans-serif;color:#f4f8ff}
 .test-link{background:none;border:0;color:#f4f8ff;font:inherit;cursor:pointer;text-align:left}
 .test-link:hover{text-decoration:underline}.test-controls{margin-bottom:16px}
@@ -1919,9 +1919,10 @@
   }
   function standings() {
     const rows=standingsRows();
-    const groups=Object.entries(divisions).map(([name,abbrs])=>[name,rows.filter(r=>abbrs.includes(r.abbr))]);
-    const assigned=new Set(Object.values(divisions).flat());
-    const others=rows.filter(r=>!assigned.has(r.abbr));
+    const configured=(data.divisions||[]).filter(d=>data.teams.some(t=>t.division_id===d.id));
+    const groups=configured.length?configured.map(d=>[d.name,rows.filter(r=>r.division_id===d.id)]):Object.entries(divisions).map(([name,abbrs])=>[name,rows.filter(r=>abbrs.includes(r.abbr))]);
+    const assigned=new Set(groups.flatMap(([,teams])=>teams.map(t=>t.id)));
+    const others=rows.filter(r=>!assigned.has(r.id));
     if(others.length)groups.push(['OTHER TEAMS',others]);
     $('standings-grid').innerHTML=groups.filter(([,teams])=>teams.length).map(([name,teams])=>'<div class="division-block"><div class="division-title"><span>&#9670;</span> '+safe(name)+'</div><div class="stand-table-wrap"><table class="stand-table"><thead><tr><th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>GF</th><th>GA</th></tr></thead><tbody>'+teams.map(r=>'<tr><td><button type="button" class="stand-team-link" data-team="'+safe(r.id)+'">'+logo(r,'stand-logo')+'<span class="stand-team-full">'+safe(r.name)+'</span><span class="stand-team-abbr">'+safe(r.abbr)+'</span></button></td><td>'+r.gp+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.t+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td></tr>').join('')+'</tbody></table></div></div>').join('');
     $('standings-grid').querySelectorAll('[data-team]').forEach(b=>b.addEventListener('click',()=>openTeam(Number(b.dataset.team))));
@@ -1962,7 +1963,7 @@
   }
   function gameCard(g, result=false) {
     const away=team(g.away_team_id),home=team(g.home_team_id);
-    return '<div class="game-card"><div class="game-date">'+safe(time(g.starts_at))+'</div><div class="game-teams"><div class="game-team">'+logo(away,'game-team-logo')+'<div class="game-team-name">'+safe(away.name)+'</div><div class="game-badge"><span class="badge">AWAY</span></div></div><div class="game-score-wrap"><div class="'+(result?'test-game-score':'game-sep')+'">'+(result?g.away_score+' – '+g.home_score:'@')+'</div></div><div class="game-team">'+logo(home,'game-team-logo')+'<div class="game-team-name">'+safe(home.name)+'</div><div class="game-badge"><span class="badge">HOME</span></div></div></div><div class="game-card-actions"><span class="badge">'+safe(g.phase)+'</span></div></div>';
+    return '<div class="game-card" data-game-id="'+safe(g.id)+'" tabindex="0" role="button" aria-label="View '+safe(away.name)+' vs '+safe(home.name)+' game details"><div class="game-date">'+safe(time(g.starts_at))+'</div><div class="game-teams"><div class="game-team">'+logo(away,'game-team-logo')+'<div class="game-team-name">'+safe(away.name)+'</div><div class="game-badge"><span class="badge">AWAY</span></div></div><div class="game-score-wrap"><div class="'+(result?'test-game-score':'game-sep')+'">'+(result?g.away_score+' – '+g.home_score:'@')+'</div></div><div class="game-team">'+logo(home,'game-team-logo')+'<div class="game-team-name">'+safe(home.name)+'</div><div class="game-badge"><span class="badge">HOME</span></div></div></div><div class="game-card-actions"><span class="badge">'+safe(g.phase)+'</span></div></div>';
   }
   function grouped(items, results=false) {
     if(!items.length)return '<div class="loading">No '+(results?'final games':'scheduled games')+' yet.</div>';
@@ -2003,14 +2004,24 @@
     }).join('')+'</div>';
     bar.hidden=false;
   }
-  $('test-score-track').addEventListener('click',e=>{
-    const button=e.target.closest('[data-game-id]');if(!button)return;
-    const g=data.games.find(g=>String(g.id)===button.dataset.gameId);if(!g)return;
+  function openGame(id) {
+    const g=data.games.find(item=>String(item.id)===String(id));if(!g)return;
     const away=team(g.away_team_id),home=team(g.home_team_id);
     $('game-info-title').textContent=away.name+' vs '+home.name;
-    $('game-info-body').innerHTML='<p><strong>'+safe(date(g.starts_at))+' · '+safe(time(g.starts_at))+' ET</strong></p><p>'+safe(g.status==='final'?'Final score: '+g.away_score+'–'+g.home_score:'Scheduled game')+' · '+safe(g.phase)+'</p><p>Player box score will appear when the test database records this game.</p>';
+    const rows=(data.game_player_stats||[]).filter(s=>s.game_id===g.id);
+    const boxes=rows.length?[['Skaters','skater',['Goals','Assists','Shots','Hits','Plus Minus']],['Goalies','goalie',['Saves','Shots Against','Goals Against']]].map(([title,kind,columns])=>{
+      const subset=rows.filter(s=>s.kind===kind);
+      if(!subset.length)return '';
+      return '<h3>'+title+'</h3><div class="test-table-scroll"><table class="stat-table"><thead><tr><th>PLAYER</th><th>TEAM</th>'+columns.map(col=>'<th>'+safe(col)+'</th>').join('')+'</tr></thead><tbody>'+subset.map(s=>{
+        const player=data.players.find(p=>p.id===s.player_id),values=s.stats||{};
+        return '<tr><td>'+(player?playerLink(player):safe(values.Username||'Player'))+'</td><td>'+safe(team(s.team_id).abbr)+'</td>'+columns.map(col=>'<td>'+safe(values[col]??'–')+'</td>').join('')+'</tr>';
+      }).join('')+'</tbody></table></div>';
+    }).join(''):'<p>No player box score recorded for this game yet.</p>';
+    $('game-info-body').innerHTML='<p><strong>'+safe(date(g.starts_at))+' · '+safe(time(g.starts_at))+' ET</strong></p><p>'+safe(g.status==='final'?'Final score: '+g.away_score+'–'+g.home_score:'Scheduled game')+' · '+safe(g.phase)+'</p>'+boxes;
     $('game-info-modal').classList.add('open');$('game-info-modal').setAttribute('aria-hidden','false');$('game-info-close').focus();
-  });
+  }
+  document.addEventListener('click',e=>{const game=e.target.closest('[data-game-id]');if(game)openGame(game.dataset.gameId)});
+  document.addEventListener('keydown',e=>{const game=e.target.closest('[data-game-id]');if(game&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openGame(game.dataset.gameId)}});
   $('game-info-close').addEventListener('click',()=>{ $('game-info-modal').classList.remove('open');$('game-info-modal').setAttribute('aria-hidden','true'); });
   $('game-info-modal').addEventListener('click',e=>{if(e.target===$('game-info-modal'))$('game-info-close').click()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('game-info-modal').classList.contains('open'))$('game-info-close').click()});
