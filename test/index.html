@@ -1792,6 +1792,31 @@
 .test-game-score{font:800 26px Manrope,system-ui,sans-serif;color:#f4f8ff}
 .test-link{background:none;border:0;color:#f4f8ff;font:inherit;cursor:pointer;text-align:left}
 .test-link:hover{text-decoration:underline}.test-controls{margin-bottom:16px}
+
+/* Team colours are confined to the database test roster. */
+#team-content{--team-base:#12355f;--team-accent:#46baf2;--team-logo:none;border:1px solid color-mix(in srgb,var(--team-accent) 35%,#15273d);border-radius:14px;overflow:hidden;background:#071626;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+#team-content .team-banner{position:relative;isolation:isolate;min-height:170px;padding:28px 32px;border:0;border-radius:0;background:radial-gradient(circle at 12% 50%,color-mix(in srgb,var(--team-accent) 35%,transparent),transparent 38%),linear-gradient(105deg,var(--team-base),#071424 88%);border-bottom:3px solid var(--team-accent)}
+#team-content .team-banner::after{content:"";position:absolute;z-index:-1;right:4%;top:-45px;width:260px;height:260px;background:var(--team-logo) center/contain no-repeat;opacity:.13;filter:grayscale(1)}
+#team-content .team-banner-logo{width:86px;height:86px}
+#team-content .team-banner-name{font-size:clamp(27px,3vw,42px);line-height:1.1}
+#team-content .team-banner-record{color:#d7e3f3}
+#team-content .team-management{background:#081b30;gap:10px;padding:16px;border-bottom:1px solid color-mix(in srgb,var(--team-accent) 35%,#132b42)}
+#team-content .team-management-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16)}
+#team-content .team-management-role{color:#b7cde2}
+#team-content .team-management-name{color:#fff}
+#team-content .subsection-label{background:linear-gradient(90deg,color-mix(in srgb,var(--team-accent) 22%,#15243b),#192740);color:#fff;border-left:4px solid var(--team-accent);padding:12px 16px}
+#team-content .subsection-note{color:#c4d0e0}
+#team-content .test-team-table-scroll{background:#102640;border:0;margin:0 0 16px}
+#team-content .test-team-table th,#team-content .test-team-table th:first-child{background:color-mix(in srgb,var(--team-accent) 17%,#263047);color:#f5f8ff;border-color:rgba(255,255,255,.1)}
+#team-content .test-team-table td{background:#0e2039;color:#f2f6ff;border-color:rgba(255,255,255,.07)}
+#team-content .test-team-table tbody tr:nth-child(even) td{background:#192b46}
+#team-content .test-team-table tbody tr:hover td{background:color-mix(in srgb,var(--team-accent) 19%,#152b47)}
+#team-content .test-team-table td:first-child{background:#0e2039}
+#team-content .test-team-table tbody tr:nth-child(even) td:first-child{background:#192b46}
+#team-content .test-team-table .test-player-link{color:#fff}
+#team-content .test-team-table .test-player-link:hover{color:var(--team-accent)}
+#team-content .test-empty{background:#102640;color:#c4d0e0;margin:0;padding:22px}
+@media(max-width:650px){#team-content .team-banner{padding:22px 18px;min-height:140px}#team-content .team-banner-logo{width:62px;height:62px}#team-content .team-management{grid-template-columns:1fr 1fr}#team-content .team-management-card:last-child{grid-column:1/-1}}
 @media(max-width:850px){.test-banner{text-align:left;padding:10px 16px}}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1832,6 +1857,12 @@
   const endpoint = 'https://admin.chelleagues.com/api/database-test/cvhl';
   const divisions = {EAST:['BOS','BUF','DET','NYR'],WEST:['DAL','LAK','SEA','UTA']};
   const logos = {BOS:'Boston Bruins.png',BUF:'Buffalo Sabres.png',DAL:'Dallas Stars.png',DET:'Detroit Red Wings.png',LAK:'Los Angeles Kings.png',NYR:'New York Rangers.png',SEA:'Seattle Kraken.png',UTA:'Utah Mammoth.png'};
+  const teamColors = {
+    BOS:['#3a270a','#f6c24f'], BUF:['#092b59','#d33d42'],
+    DAL:['#063b39','#42c4a5'], DET:['#671b28','#ec555b'],
+    LAK:['#202a36','#aab8c9'], NYR:['#0c3267','#ea4c56'],
+    SEA:['#073c4b','#5ad4cf'], UTA:['#173c43','#9ce0d2']
+  };
   const $ = id => document.getElementById(id);
   const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let data, currentTeam;
@@ -1963,6 +1994,11 @@
   function openTeam(id) {
     currentTeam=id;
     const t=team(id);
+    const [base,accent]=teamColors[t.abbr]||['#12355f','#46baf2'];
+    const area=$('team-content');
+    area.style.setProperty('--team-base',base);
+    area.style.setProperty('--team-accent',accent);
+    area.style.setProperty('--team-logo',logos[t.abbr]?'url("../CVHL/images/'+encodeURIComponent(logos[t.abbr])+'")':'none');
     $('team-nav').querySelectorAll('button').forEach(b=>b.classList.toggle('active',Number(b.dataset.team)===id));
     const roster=data.players.filter(p=>p.team_id===id).sort((a,b)=>a.name.localeCompare(b.name));
     const goalies=roster.filter(p=>/^(g|goalie)$/i.test(p.position)||p.goalie?.games_played>0);
