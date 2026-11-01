@@ -1021,7 +1021,7 @@
   }
   .game-card:hover { border-color: #79dce5; box-shadow: inset 4px 0 var(--away-accent, #5ad4cf), inset -4px 0 var(--home-accent, #5ad4cf), 0 10px 25px rgba(0,0,0,0.28); }
   .game-card .game-date { color: #d5e6f2; }
-  .game-card .game-code { display:block; color:#f5faff; font-size:12px; font-weight:800; letter-spacing:.02em; }
+  .game-card .badge.game-code { background: rgba(227,38,54,0.25); color:#fff; border-color: rgba(255,115,125,0.58); font-weight:800; letter-spacing:.02em; }
   .game-card .game-team-name, .game-card .game-sep, .game-card .test-game-score { color: #f5faff; }
   .game-card .badge { background: rgba(4,17,31,0.58); color: #e8f6ff; border: 1px solid rgba(220,242,255,0.18); }
   .game-date {
@@ -2158,7 +2158,7 @@
     const awayPalette=teamColors[away.abbr]||['#173c43','#5ad4cf'];
     const homePalette=teamColors[home.abbr]||['#173c43','#5ad4cf'];
     const colors='--away-color:'+awayPalette[0]+';--away-accent:'+awayPalette[1]+';--home-color:'+homePalette[0]+';--home-accent:'+homePalette[1];
-    return '<div class="game-card" style="'+colors+'" data-game-id="'+safe(g.id)+'" tabindex="0" role="button" aria-label="View '+safe(away.name)+' vs '+safe(home.name)+' game details"><div class="game-date">'+safe(time(g.starts_at))+(g.game_code?'<span class="game-code">Code: '+safe(g.game_code)+'</span>':'')+'</div><div class="game-teams"><div class="game-team">'+logo(away,'game-team-logo')+'<div class="game-team-name">'+safe(away.name)+'</div><div class="game-badge"><span class="badge">AWAY</span></div></div><div class="game-score-wrap"><div class="'+(result?'test-game-score':'game-sep')+'">'+(result?g.away_score+' – '+g.home_score:'@')+'</div></div><div class="game-team">'+logo(home,'game-team-logo')+'<div class="game-team-name">'+safe(home.name)+'</div><div class="game-badge"><span class="badge">HOME</span></div></div></div><div class="game-card-actions"><span class="badge">'+safe(g.phase)+'</span></div></div>';
+    return '<div class="game-card" style="'+colors+'" data-game-id="'+safe(g.id)+'" tabindex="0" role="button" aria-label="View '+safe(away.name)+' vs '+safe(home.name)+' game details"><div class="game-date">'+safe(time(g.starts_at))+'</div><div class="game-teams"><div class="game-team">'+logo(away,'game-team-logo')+'<div class="game-team-name">'+safe(away.name)+'</div><div class="game-badge"><span class="badge">AWAY</span></div></div><div class="game-score-wrap"><div class="'+(result?'test-game-score':'game-sep')+'">'+(result?g.away_score+' – '+g.home_score:'@')+'</div></div><div class="game-team">'+logo(home,'game-team-logo')+'<div class="game-team-name">'+safe(home.name)+'</div><div class="game-badge"><span class="badge">HOME</span></div></div></div><div class="game-card-actions"><span class="badge">'+safe(g.phase)+'</span>'+(g.game_code?'<span class="badge game-code">'+safe(g.game_code)+'</span>':'')+'</div></div>';
   }
   function grouped(items, results=false) {
     if(!items.length)return '<div class="loading">No '+(results?'final games':'scheduled games')+' yet.</div>';
