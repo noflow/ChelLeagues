@@ -1836,13 +1836,13 @@
   function page(id, button) {
     document.querySelectorAll('.page').forEach(p => p.classList.toggle('active',p.id==='page-'+id));
     document.querySelectorAll('#main-nav button').forEach(b => b.classList.toggle('active',b===button));
-    $('main-nav').classList.remove('mobile-open');
+    document.querySelector('header').classList.remove('menu-open');
     document.querySelector('.mobile-menu-toggle').setAttribute('aria-expanded','false');
     history.replaceState(null,'','#'+id);
   }
   document.querySelectorAll('#main-nav button').forEach(button => button.addEventListener('click',() => page(button.dataset.page,button)));
   document.querySelector('.mobile-menu-toggle').addEventListener('click', e => {
-    const open=$('main-nav').classList.toggle('mobile-open');
+    const open=document.querySelector('header').classList.toggle('menu-open');
     e.currentTarget.setAttribute('aria-expanded',String(open));
   });
   function choices(id) {
