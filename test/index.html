@@ -1838,15 +1838,45 @@
   const team = id => data.teams.find(t => t.id === id) || {name:'Team',abbr:'?'};
   const playerLink = p => '<button type="button" class="test-player-link" data-player-index="'+data.players.indexOf(p)+'">'+safe(p.name)+'</button>';
   let previousFocus;
+  const statSections = {
+    skater: [
+      ['Record',[['GP','games_played'],['W','wins'],['L','losses'],['OTL','overtime_losses']]],
+      ['Scoring',[['G','goals'],['A','assists'],['PTS','points'],['Pts/GP','points_per_game'],['G/GP','goals_per_game'],['A/GP','assists_per_game'],['PPG','power_play_goals'],['SHG','short_handed_goals'],['ES Goals','even_strength_goals'],['GWGs','game_winning_goals']]],
+      ['Shooting',[['Shots','shots'],['Shot Attempts','shot_attempts'],['Shot %','shot_pct'],['Shots On Net %','shots_on_net_pct'],['EV Sh%','even_strength_shot_pct']]],
+      ['Defence',[['Hits','hits'],['Blocked Shots','blocked_shots'],['Takeaways','takeaways'],['Interceptions','interceptions'],['Deflections','deflections'],['Giveaways','giveaways'],['Plus Minus','plus_minus'],['PIMs','penalty_minutes'],['Penalties Drawn','penalties_drawn'],['PK Zone Clears','pk_zone_clears']]],
+      ['Passing & Puck',[['Pass Attempts','pass_attempts'],['Passes','passes'],['Pass %','pass_pct'],['Saucer Passes','saucer_passes'],['Faceoff Wins','faceoff_wins'],['Faceoff Losses','faceoff_losses'],['Faceoff %','faceoff_pct'],['Possession (mins)','possession_minutes']]],
+      ['Ice Time',[['TOI (mins)','time_on_ice_minutes'],['Offense Rating','offense_rating'],['Defense Rating','defense_rating'],['Teamplay Rating','teamplay_rating']]],
+      ['Advanced',[['EVO','evo'],['GAR','gar'],['WAR','war']]],
+    ],
+    goalie: [
+      ['Record',[['GP','games_played'],['W','wins'],['L','losses'],['OTL','overtime_losses']]],
+      ['Goals',[['Goals Against','goals_against'],['GAA','gaa'],['Saves','saves'],['Shots Against','shots_against'],['Save %','save_pct']]],
+      ['Special Saves',[['Breakaway Saves','breakaway_saves'],['Breakaway Save %','breakaway_save_pct'],['Penalty Shot Saves','penalty_shot_saves'],['Penalty Shot Save %','penalty_shot_save_pct'],['Diving Saves','diving_saves'],['Pokechecks','pokechecks']]],
+      ['Other',[['PK Zone Clears','pk_zone_clears'],['Shutout Periods','shutout_periods']]],
+    ]
+  };
+  function statPanel(stats,kind) {
+    return statSections[kind].map(([title,fields])=>{
+      const boxes=fields.filter(([,key])=>stats[key]!==undefined).map(([label,key])=>'<div class="stat-box"><div class="stat-val">'+safe(stats[key])+'</div><div class="stat-lbl">'+safe(label)+'</div></div>').join('');
+      return boxes?'<div class="stat-section-title">'+safe(title)+'</div><div class="stat-grid">'+boxes+'</div>':'';
+    }).join('') || '<p>No recorded stats yet.</p>';
+  }
   function openPlayer(index) {
     const p=data.players[index];if(!p)return;
     previousFocus=document.activeElement;
     $('modal-name').textContent=p.name;
-    $('modal-meta').innerHTML='<span>'+safe(team(p.team_id).name)+'</span><span>'+safe(p.position||'Player')+'</span>';
-    const stats=/^(g|goalie)$/i.test(p.position)||p.saves>0 ? [['Games',p.gp],['Saves',p.saves]] : [['Games',p.gp],['Goals',p.goals],['Assists',p.assists],['Points',p.points],['Shots',p.shots]];
-    $('modal-body').innerHTML='<div class="test-player-stats">'+stats.map(([label,value])=>'<div class="test-player-stat"><strong>'+safe(value??0)+'</strong><span>'+safe(label)+'</span></div>').join('')+'</div><p>Database test season totals</p>';
+    $('modal-meta').innerHTML='<span>'+safe(team(p.team_id).name)+'</span><span>'+safe(p.skater?.position||p.position||'Player')+'</span>';
+    const tabs=[['skater','Player Stats'],['goalie','Goalie Stats'],['playoff_skater','Playoff Player'],['playoff_goalie','Playoff Goalie']]
+      .filter(([key])=>p[key]?.games_played>0);
+    if(!tabs.length)tabs.push(['none','Season Stats']);
+    $('modal-body').innerHTML='<div class="player-card-tabs">'+tabs.map(([key,label],i)=>'<button type="button" class="player-card-tab'+(i?'':' active')+'" data-card-tab="'+key+'">'+label+'</button>').join('')+'</div>'+tabs.map(([key],i)=>'<div class="player-card-panel'+(i?'':' active')+'" data-card-panel="'+key+'">'+(key==='none'?'<p>No recorded games for this player in the test database yet.</p>':statPanel(p[key],key.includes('goalie')?'goalie':'skater'))+'</div>').join('');
     $('player-modal').classList.add('open');$('player-modal').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';$('modal-close').focus();
   }
+  $('modal-body').addEventListener('click',e=>{
+    const tab=e.target.closest('[data-card-tab]');if(!tab)return;
+    $('modal-body').querySelectorAll('[data-card-tab]').forEach(el=>el.classList.toggle('active',el===tab));
+    $('modal-body').querySelectorAll('[data-card-panel]').forEach(el=>el.classList.toggle('active',el.dataset.cardPanel===tab.dataset.cardTab));
+  });
   function closePlayer() { $('player-modal').classList.remove('open');$('player-modal').setAttribute('aria-hidden','true');document.body.style.overflow='';previousFocus?.focus(); }
   document.addEventListener('click',e=>{const button=e.target.closest('[data-player-index]');if(button)openPlayer(Number(button.dataset.playerIndex));});
   $('modal-close').addEventListener('click',closePlayer);
@@ -1898,8 +1928,12 @@
   }
   function statsTable(rows, goalie=false) {
     if(!rows.length)return '<div class="test-empty">No '+(goalie?'goalie':'player')+' stats yet.</div>';
-    const heads=goalie?['PLAYER','TEAM','GP','SAVES']:['PLAYER','TEAM','GP','G','A','PTS','SHOTS'];
-    return '<table class="stat-table"><thead><tr>'+heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(p=>'<tr><td>'+playerLink(p)+'</td><td>'+safe(team(p.team_id).abbr)+'</td><td>'+p.gp+'</td>'+(goalie?'<td>'+p.saves+'</td>':'<td>'+p.goals+'</td><td>'+p.assists+'</td><td>'+p.points+'</td><td>'+p.shots+'</td>')+'</tr>').join('')+'</tbody></table>';
+    const heads=goalie?['PLAYER','TEAM','GP','W','L','GA','GAA','SAVES','SA','SV%']:['PLAYER','TEAM','GP','G','A','PTS','SHOTS','SH%','HITS','+/-'];
+    return '<table class="stat-table"><thead><tr>'+heads.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(p=>{
+      const x=goalie?p.goalie:p.skater;
+      const values=goalie?[x?.games_played,x?.wins,x?.losses,x?.goals_against,x?.gaa,x?.saves,x?.shots_against,x?.save_pct]:[x?.games_played??p.gp,x?.goals??p.goals,x?.assists??p.assists,x?.points??p.points,x?.shots??p.shots,x?.shot_pct,x?.hits,x?.plus_minus];
+      return '<tr><td>'+playerLink(p)+'</td><td>'+safe(team(p.team_id).abbr)+'</td>'+values.map(v=>'<td>'+safe(v??'–')+'</td>').join('')+'</tr>';
+    }).join('')+'</tbody></table>';
   }
   function players() {
     const q=$('player-search').value.trim().toLowerCase(), id=$('player-team').value;
@@ -1909,7 +1943,7 @@
   }
   $('player-search').addEventListener('input',players);
   function goalies() {
-    const rows=data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0).sort((a,b)=>b.saves-a.saves||a.name.localeCompare(b.name));
+    const rows=data.players.filter(p=>p.goalie?.games_played>0||/^(g|goalie)$/i.test(p.position)||p.saves>0).sort((a,b)=>(b.goalie?.saves||0)-(a.goalie?.saves||0)||a.name.localeCompare(b.name));
     $('goalie-table-wrap').innerHTML=statsTable(rows,true);
   }
   function openTeam(id) {
@@ -1947,9 +1981,9 @@
     const items=data.games.filter(g=>g.status==='final'&&(!id||String(g.home_team_id)===id||String(g.away_team_id)===id)).sort((a,b)=>b.starts_at.localeCompare(a.starts_at));
     $('game-count').textContent=items.length+' games';$('games-list').innerHTML=grouped(items,true);
   }
-  function leaders(title,players,keys,order='desc',format=value=>String(value)) {
-    const value=p=>{for(const key of keys){if(p[key]!==undefined&&p[key]!==null&&p[key]!=='')return Number(p[key])}return NaN};
-    const top=[...players].filter(p=>p.gp>0&&Number.isFinite(value(p))).sort((a,b)=>order==='asc'?value(a)-value(b):value(b)-value(a)).slice(0,5);
+  function leaders(title,players,keys,order='desc',format=value=>String(value),kind='skater') {
+    const value=p=>{const stats=p[kind];if(!stats)return NaN;for(const key of keys){if(stats[key]!==undefined&&stats[key]!==null&&stats[key]!=='')return parseFloat(stats[key])}return NaN};
+    const top=[...players].filter(p=>p[kind]?.games_played>0&&Number.isFinite(value(p))).sort((a,b)=>order==='asc'?value(a)-value(b):value(b)-value(a)).slice(0,5);
     return '<div class="leader-card"><div class="leader-card-title">'+safe(title)+'</div><div class="leader-list">'+(top.length?top.map((p,i)=>'<div class="leader-row"><div class="leader-rank">'+(i+1)+'</div>'+logo(team(p.team_id),'leader-logo')+'<div><div class="leader-name">'+playerLink(p)+'</div><div class="leader-team">'+safe(team(p.team_id).abbr)+'</div></div><div class="leader-value">'+safe(format(value(p)))+'</div></div>').join(''):'<div class="leader-empty">No recorded stats yet</div>')+'</div></div>';
   }
   function gameCarousel() {
@@ -1982,10 +2016,13 @@
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('game-info-modal').classList.contains('open'))$('game-info-close').click()});
   function home() {
     const played=data.games.filter(g=>g.status==='final').length;
-    $('home-content').innerHTML='<section class="home-hero"><div><div class="home-title">CVHL Database Test</div><div class="home-subtitle">'+safe(data.season?.name||'Season setup in progress')+'</div></div><div class="home-intro">This is the database test copy of CVHL. Schedule and stats here are separate from the real CVHL website.</div></section><section class="home-metrics"><div class="home-metric"><div class="home-metric-value">'+data.teams.length+'</div><div class="home-metric-label">Teams</div></div><div class="home-metric"><div class="home-metric-value">'+played+'</div><div class="home-metric-label">Games Played</div></div><div class="home-metric"><div class="home-metric-value">'+data.players.length+'</div><div class="home-metric-label">Players</div></div></section><section class="leader-grid">'+leaders('Top Goal Scorers',data.players,['goals'])+leaders('Top Assists',data.players,['assists'])+leaders('Plus / Minus',data.players,['plus_minus','plusMinus'])+leaders('Hits',data.players,['hits'])+leaders('Interceptions',data.players,['interceptions'])+leaders('Takeaways',data.players,['takeaways'])+leaders('Goalies: GAA',data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0),['gaa'],'asc',v=>v.toFixed(2))+leaders('Goalies: Save %',data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0),['save_pct','save_percentage'],'desc',v=>v.toFixed(1)+'%')+'</section>';
+    $('home-content').innerHTML='<section class="home-hero"><div><div class="home-title">CVHL Database Test</div><div class="home-subtitle">'+safe(data.season?.name||'Season setup in progress')+'</div></div><div class="home-intro">This is the database test copy of CVHL. Schedule and stats here are separate from the real CVHL website.</div></section><section class="home-metrics"><div class="home-metric"><div class="home-metric-value">'+data.teams.length+'</div><div class="home-metric-label">Teams</div></div><div class="home-metric"><div class="home-metric-value">'+played+'</div><div class="home-metric-label">Games Played</div></div><div class="home-metric"><div class="home-metric-value">'+data.players.length+'</div><div class="home-metric-label">Players</div></div></section><section class="leader-grid">'+leaders('Top Goal Scorers',data.players,['goals'])+leaders('Top Assists',data.players,['assists'])+leaders('Plus / Minus',data.players,['plus_minus'])+leaders('Hits',data.players,['hits'])+leaders('Interceptions',data.players,['interceptions'])+leaders('Takeaways',data.players,['takeaways'])+leaders('Goalies: GAA',data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0),['gaa'],'asc',v=>v.toFixed(2),'goalie')+leaders('Goalies: Save %',data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0),['save_pct'],'desc',v=>v.toFixed(1)+'%','goalie')+'</section>';
   }
   fetch(endpoint,{credentials:'omit',cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Feed unavailable ('+r.status+')');return r.json()}).then(result=>{
-    data=result;choices('player-team');choices('schedule-team');choices('game-team');
+    data=result;
+    const projected=new Map((data.published_player_stats||[]).map(s=>[s.player_id+':'+s.phase+':'+s.kind,s]));
+    data.players.forEach(p=>{p.skater=projected.get(p.id+':regular:skater');p.goalie=projected.get(p.id+':regular:goalie');p.playoff_skater=projected.get(p.id+':playoff:skater');p.playoff_goalie=projected.get(p.id+':playoff:goalie');});
+    choices('player-team');choices('schedule-team');choices('game-team');
     standings();players();goalies();teams();schedule();games();home();gameCarousel();
     const target=location.hash.slice(1);
     if(['home','standings','players','goalies','teams','schedule','games'].includes(target))page(target,document.querySelector('#main-nav [data-page="'+target+'"]'));
