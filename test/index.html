@@ -1827,6 +1827,7 @@
 (() => {
   'use strict';
   const endpoint = 'https://admin.chelleagues.com/api/database-test/cvhl';
+  const divisions = {EAST:['BOS','BUF','DET','NYR'],WEST:['DAL','LAK','SEA','UTA']};
   const logos = {BOS:'Boston Bruins.png',BUF:'Buffalo Sabres.png',DAL:'Dallas Stars.png',DET:'Detroit Red Wings.png',LAK:'Los Angeles Kings.png',NYR:'New York Rangers.png',SEA:'Seattle Kraken.png',UTA:'Utah Mammoth.png'};
   const $ = id => document.getElementById(id);
   const safe = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1885,7 +1886,11 @@
   }
   function standings() {
     const rows=standingsRows();
-    $('standings-grid').innerHTML='<div class="division-block"><div class="division-title"><span>&#9670;</span> CVHL DATABASE TEST</div><div class="stand-table-wrap"><table class="stand-table"><thead><tr><th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>GF</th><th>GA</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><button type="button" class="stand-team-link" data-team="'+safe(r.id)+'">'+logo(r,'stand-logo')+'<span class="stand-team-full">'+safe(r.name)+'</span><span class="stand-team-abbr">'+safe(r.abbr)+'</span></button></td><td>'+r.gp+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.t+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td></tr>').join('')+'</tbody></table></div></div>';
+    const groups=Object.entries(divisions).map(([name,abbrs])=>[name,rows.filter(r=>abbrs.includes(r.abbr))]);
+    const assigned=new Set(Object.values(divisions).flat());
+    const others=rows.filter(r=>!assigned.has(r.abbr));
+    if(others.length)groups.push(['OTHER TEAMS',others]);
+    $('standings-grid').innerHTML=groups.filter(([,teams])=>teams.length).map(([name,teams])=>'<div class="division-block"><div class="division-title"><span>&#9670;</span> '+safe(name)+'</div><div class="stand-table-wrap"><table class="stand-table"><thead><tr><th>TEAM</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>GF</th><th>GA</th></tr></thead><tbody>'+teams.map(r=>'<tr><td><button type="button" class="stand-team-link" data-team="'+safe(r.id)+'">'+logo(r,'stand-logo')+'<span class="stand-team-full">'+safe(r.name)+'</span><span class="stand-team-abbr">'+safe(r.abbr)+'</span></button></td><td>'+r.gp+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.t+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td></tr>').join('')+'</tbody></table></div></div>').join('');
     $('standings-grid').querySelectorAll('[data-team]').forEach(b=>b.addEventListener('click',()=>openTeam(Number(b.dataset.team))));
   }
   function statsTable(rows, goalie=false) {
@@ -1939,13 +1944,14 @@
     const items=data.games.filter(g=>g.status==='final'&&(!id||String(g.home_team_id)===id||String(g.away_team_id)===id)).sort((a,b)=>b.starts_at.localeCompare(a.starts_at));
     $('game-count').textContent=items.length+' games';$('games-list').innerHTML=grouped(items,true);
   }
-  function leaders(title,players,key) {
-    const top=[...players].filter(p=>p[key]>0).sort((a,b)=>b[key]-a[key]).slice(0,5);
-    return '<div class="leader-card"><div class="leader-card-title">'+safe(title)+'</div><div class="leader-list">'+(top.length?top.map((p,i)=>'<div class="leader-row"><div class="leader-rank">'+(i+1)+'</div>'+logo(team(p.team_id),'leader-logo')+'<div><div class="leader-name">'+playerLink(p)+'</div><div class="leader-team">'+safe(team(p.team_id).abbr)+'</div></div><div class="leader-value">'+p[key]+'</div></div>').join(''):'<div class="leader-empty">No data yet</div>')+'</div></div>';
+  function leaders(title,players,keys,order='desc',format=value=>String(value)) {
+    const value=p=>{for(const key of keys){if(p[key]!==undefined&&p[key]!==null&&p[key]!=='')return Number(p[key])}return NaN};
+    const top=[...players].filter(p=>p.gp>0&&Number.isFinite(value(p))).sort((a,b)=>order==='asc'?value(a)-value(b):value(b)-value(a)).slice(0,5);
+    return '<div class="leader-card"><div class="leader-card-title">'+safe(title)+'</div><div class="leader-list">'+(top.length?top.map((p,i)=>'<div class="leader-row"><div class="leader-rank">'+(i+1)+'</div>'+logo(team(p.team_id),'leader-logo')+'<div><div class="leader-name">'+playerLink(p)+'</div><div class="leader-team">'+safe(team(p.team_id).abbr)+'</div></div><div class="leader-value">'+safe(format(value(p)))+'</div></div>').join(''):'<div class="leader-empty">No recorded stats yet</div>')+'</div></div>';
   }
   function home() {
     const played=data.games.filter(g=>g.status==='final').length;
-    $('home-content').innerHTML='<section class="home-hero"><div><div class="home-title">CVHL Database Test</div><div class="home-subtitle">'+safe(data.season?.name||'Season setup in progress')+'</div></div><div class="home-intro">This is the database test copy of CVHL. Schedule and stats here are separate from the real CVHL website.</div></section><section class="home-metrics"><div class="home-metric"><div class="home-metric-value">'+data.teams.length+'</div><div class="home-metric-label">Teams</div></div><div class="home-metric"><div class="home-metric-value">'+played+'</div><div class="home-metric-label">Games Played</div></div><div class="home-metric"><div class="home-metric-value">'+data.players.length+'</div><div class="home-metric-label">Players</div></div></section><section class="leader-grid">'+leaders('Top Scorers',data.players,'points')+leaders('Top Goals',data.players,'goals')+leaders('Top Assists',data.players,'assists')+'</section>';
+    $('home-content').innerHTML='<section class="home-hero"><div><div class="home-title">CVHL Database Test</div><div class="home-subtitle">'+safe(data.season?.name||'Season setup in progress')+'</div></div><div class="home-intro">This is the database test copy of CVHL. Schedule and stats here are separate from the real CVHL website.</div></section><section class="home-metrics"><div class="home-metric"><div class="home-metric-value">'+data.teams.length+'</div><div class="home-metric-label">Teams</div></div><div class="home-metric"><div class="home-metric-value">'+played+'</div><div class="home-metric-label">Games Played</div></div><div class="home-metric"><div class="home-metric-value">'+data.players.length+'</div><div class="home-metric-label">Players</div></div></section><section class="leader-grid">'+leaders('Top Goal Scorers',data.players,['goals'])+leaders('Top Assists',data.players,['assists'])+leaders('Plus / Minus',data.players,['plus_minus','plusMinus'])+leaders('Hits',data.players,['hits'])+leaders('Interceptions',data.players,['interceptions'])+leaders('Takeaways',data.players,['takeaways'])+leaders('Goalies: GAA',data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0),['gaa'],'asc',v=>v.toFixed(2))+leaders('Goalies: Save %',data.players.filter(p=>/^(g|goalie)$/i.test(p.position)||p.saves>0),['save_pct','save_percentage'],'desc',v=>v.toFixed(1)+'%')+'</section>';
   }
   fetch(endpoint,{credentials:'omit',cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Feed unavailable ('+r.status+')');return r.json()}).then(result=>{
     data=result;choices('player-team');choices('schedule-team');choices('game-team');
