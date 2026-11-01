@@ -1869,6 +1869,62 @@
   #page-players .test-controls{padding:10px}
 }
 
+  /* Database test standings and goalies share the navy/ice palette. */
+  #page-standings,#page-goalies{
+    position:relative;isolation:isolate;overflow:hidden;
+    padding:24px;border:1px solid #2b5a84;border-radius:18px;
+    background:radial-gradient(circle at 88% 0%,rgba(52,154,218,.24),transparent 38%),
+      linear-gradient(145deg,#112c4c 0%,#091a30 57%,#071322 100%);
+    box-shadow:0 18px 42px rgba(0,7,20,.28);
+  }
+  #page-standings::before,#page-goalies::before{
+    content:"";position:absolute;z-index:-1;pointer-events:none;
+    top:-52px;right:-32px;width:min(34vw,330px);height:330px;
+    background:url("../CVHL/images/NHL%20Logo.png") center/contain no-repeat;
+    opacity:.09;filter:grayscale(1);
+  }
+  #page-standings .section-title,#page-goalies .section-title{color:#f4faff;border-color:#42bff4}
+  #page-standings .test-note,#page-goalies .test-note{color:#b8d3e8}
+  #page-standings .division-block{
+    background:#102640;border:1px solid rgba(93,177,224,.34);
+    border-radius:12px;box-shadow:0 12px 30px rgba(0,8,23,.22);
+  }
+  #page-standings .division-title{
+    background:linear-gradient(100deg,#17456e,#0b203a);
+    border-bottom:1px solid rgba(107,194,231,.3);
+  }
+  #page-standings .stand-table thead tr,#page-goalies .stat-table th{
+    background:#203f60;color:#d7f2ff;border-color:#3b6988;
+  }
+  #page-standings .stand-table tbody td{
+    background:rgba(11,34,61,.94);color:#f2f8ff;
+    border-bottom:1px solid rgba(119,177,211,.16);
+  }
+  #page-standings .stand-table tbody tr:nth-child(even) td{background:rgba(26,55,84,.94)}
+  #page-standings .stand-table tbody tr:hover td{background:#28577d}
+  #page-standings .stand-team-link,#page-standings .pts-bold{color:#f4fbff}
+  #page-standings .stand-team-link:hover{color:#64d0ff}
+  #page-goalies .test-table-scroll{
+    border:1px solid rgba(93,177,224,.34);border-radius:12px;
+    background:#102640;box-shadow:0 12px 30px rgba(0,8,23,.22);
+  }
+  #page-goalies .stat-table{background:transparent;color:#eff8ff}
+  #page-goalies .stat-table td{
+    background:rgba(11,34,61,.94);color:#f2f8ff;
+    border-color:rgba(119,177,211,.16);
+  }
+  #page-goalies .stat-table tbody tr:nth-child(even) td{background:rgba(26,55,84,.94)}
+  #page-goalies .stat-table tbody tr:hover td{background:#28577d}
+  #page-goalies .stat-table .test-player-link{color:#f4fbff}
+  #page-goalies .stat-table .test-player-link:hover{color:#64d0ff}
+  #page-goalies .test-empty{background:rgba(11,34,61,.94);color:#b8d3e8;margin:0}
+  @media(max-width:700px){
+    #page-standings,#page-goalies{padding:15px 10px;border-radius:12px}
+    #page-standings::before,#page-goalies::before{
+      width:190px;height:190px;right:-34px;top:-18px;
+    }
+  }
+
   /* Database test profile shares the league palette; account data remains separate. */
   #page-profile{color:#f5faff;max-width:1120px;margin:auto}
   #page-profile .section-title{color:#f5faff;border-color:#40c6ff}
