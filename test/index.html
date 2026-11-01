@@ -1981,6 +1981,13 @@
   .tp-availability-header h3{margin:0}
   .tp-week-picker{display:flex;align-items:center;gap:8px;color:#c6e3f4;font:700 13px 'Manrope',sans-serif}
   .tp-week-picker select{width:auto;min-width:170px;max-width:100%;padding:8px 10px}
+  .tp-quick-response{display:flex;gap:6px;margin-top:6px}
+  .tp-quick-response button{flex:1;border:1px solid #597998;background:#122e4b;color:#d9eefa;
+    border-radius:7px;padding:7px 8px;font:700 12px 'Manrope',sans-serif;cursor:pointer}
+  .tp-quick-response button.available[aria-pressed="true"]{background:#145b35;border-color:#39d47b;color:#fff}
+  .tp-quick-response button.unavailable[aria-pressed="true"]{background:#69212c;border-color:#f16e7b;color:#fff}
+  .tp-results li{align-items:center}
+  .tp-results li>strong{white-space:nowrap;color:#f0f8ff}
   .tp-response select.availability-available{background:#145b35;border-color:#39d47b;color:#effff4;box-shadow:0 0 0 1px rgba(57,212,123,.26)}
   .tp-response select.availability-unavailable{background:#69212c;border-color:#f16e7b;color:#fff4f5;box-shadow:0 0 0 1px rgba(241,110,123,.26)}
   .tp-response select:disabled{opacity:.72;cursor:not-allowed}
@@ -2362,6 +2369,6 @@
   retryFeed();
 })();
 </script>
-<script defer src="profile.js?v=6"></script>
+<script defer src="profile.js?v=7"></script>
 </body>
 </html>
