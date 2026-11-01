@@ -66,8 +66,9 @@
   }
   function selectedWeek(data) {
     const weeks=data.schedule_weeks || [];
-    const next=(data.schedule_games || data.upcoming_games || []).find(game=>
-      game.status==='scheduled' && new Date(game.starts_at).getTime()>Date.now());
+    const next=(data.schedule_games || data.upcoming_games || [])
+      .filter(game=>game.status==='scheduled' && new Date(game.starts_at).getTime()>Date.now())
+      .sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at))[0];
     return next?.week_number || weeks.at(-1)?.number || 1;
   }
   function render(data) {
