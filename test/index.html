@@ -1894,7 +1894,7 @@
     const nav=document.querySelector('#main-nav [data-page="teams"]');page('teams',nav);
   }
   function teams() {
-    $('team-nav').innerHTML=data.teams.map(t=>'<button type="button" class="team-btn" data-team="'+safe(t.id)+'">'+logo(t,'team-nav-logo')+safe(t.abbr)+'</button>').join('');
+    $('team-nav').innerHTML=data.teams.map(t=>'<button type="button" class="team-btn" data-team="'+safe(t.id)+'">'+logo(t,'team-btn-logo')+safe(t.abbr)+'</button>').join('');
     $('team-nav').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>openTeam(Number(b.dataset.team))));
     if(data.teams.length){currentTeam=data.teams[0].id;openTeam(currentTeam);page('home',document.querySelector('#main-nav [data-page="home"]'))}
     else $('team-content').innerHTML='<div class="loading">No teams yet.</div>';
