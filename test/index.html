@@ -1894,6 +1894,13 @@
   .tp-stat span{font-size:12px;color:#b8ddf2}
   .tp-games{list-style:none;display:grid;gap:8px}
   .tp-games li{padding:10px 12px;background:#193c60;border-radius:8px;display:flex;justify-content:space-between;gap:12px}
+  .tp-card form{display:grid;gap:12px}
+  .tp-card form label,.tp-response{display:grid;gap:5px;color:#c6e3f4;font-size:13px;font-weight:700}
+  .tp-card input,.tp-card select{width:100%;min-width:0;padding:10px 11px;border:1px solid #4d8db6;
+    border-radius:8px;background:#092039;color:#f5faff;font:600 14px 'Manrope',sans-serif}
+  .tp-card input:focus,.tp-card select:focus{outline:2px solid #40c6ff;outline-offset:1px}
+  .tp-card button:disabled,.tp-card select:disabled{opacity:.6;cursor:wait}
+  .tp-response{min-width:145px}
   @media(max-width:700px){.tp-hero{padding:20px}.tp-grid{grid-template-columns:1fr}.tp-stat-grid{grid-template-columns:repeat(2,1fr)}.tp-games li{display:block}}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
@@ -2261,6 +2268,6 @@
   retryFeed();
 })();
 </script>
-<script defer src="profile.js?v=3"></script>
+<script defer src="profile.js?v=4"></script>
 </body>
 </html>
