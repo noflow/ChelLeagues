@@ -2036,7 +2036,7 @@
     const ga=games.reduce((n,g)=>n+Number(g.home_team_id===id?g.away_score:g.home_score),0);
     const roles=['owner','gm','agm'];
     const salaryKnown=roster.every(p=>p.salary!=null);
-    const capRemaining=salaryKnown&&data.salary_cap!=null?money(data.salary_cap-roster.reduce((sum,p)=>sum+Number(p.salary),0)):'–';
+    const capRemaining=t.cap_remaining!=null?money(t.cap_remaining):(salaryKnown&&data.salary_cap!=null?money(data.salary_cap-roster.reduce((sum,p)=>sum+Number(p.salary),0)):'–');
     const management=roles.map(role=>{
       const people=(data.team_management||[]).filter(r=>r.team_id===id&&r.role===role).map(r=>r.name).join(', ');
       return '<div class="team-management-card"><div class="team-management-role">'+role.toUpperCase()+'</div><div class="team-management-name">'+safe(people||'Not assigned')+'</div></div>';
