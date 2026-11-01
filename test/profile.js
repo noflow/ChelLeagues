@@ -48,8 +48,33 @@
       (message ? '<p class="tp-muted" role="alert">'+escape(message)+'</p>' : '')+
       '<div class="tp-actions"><button class="tp-button" type="button" data-profile-login>Sign in with Discord</button></div></div>';
   }
+  let currentProfile;
+  const availabilityOptions = [['none','No response'],['available','Available'],['unavailable','Unavailable']];
+  function weekGames(data, weekNumber) {
+    const games=(data.schedule_games || data.upcoming_games || []).filter(game=>Number(game.week_number)===Number(weekNumber));
+    if(!games.length) return '<p class="tp-muted">No games for your team this week.</p>';
+    return '<ul class="tp-games">'+games.map(game=>{
+      const status=(data.availability || {})[game.id] || 'none';
+      const open=game.status==='scheduled' && new Date(game.starts_at).getTime()>Date.now();
+      return '<li><span>'+escape(niceTime(game.starts_at))+'<br><strong>'+
+        escape((game.home_team_id===data.player.team_id ? 'vs ' : '@ ')+game.opponent_name)+
+        '</strong></span><label class="tp-response">Availability<select data-test-game="'+escape(game.id)+
+        '" data-saved-status="'+escape(status)+'" class="availability-'+escape(status)+'"'+(open?'':' disabled')+'>'+
+        availabilityOptions.map(([value,label])=>'<option value="'+value+'"'+(status===value?' selected':'')+'>'+label+'</option>').join('')+
+        '</select></label></li>';
+    }).join('')+'</ul>';
+  }
+  function selectedWeek(data) {
+    const weeks=data.schedule_weeks || [];
+    const next=(data.schedule_games || data.upcoming_games || []).find(game=>
+      game.status==='scheduled' && new Date(game.starts_at).getTime()>Date.now());
+    return next?.week_number || weeks.at(-1)?.number || 1;
+  }
   function render(data) {
-    const p=data.player, team=data.team, stats=data.stats || [], games=data.upcoming_games || []; const prefs=data.preferences || {}, availability=data.availability || {};
+    currentProfile=data;
+    const p=data.player, team=data.team, stats=data.stats || []; const prefs=data.preferences || {};
+    const weeks=data.schedule_weeks || [];
+    const week=selectedWeek(data);
     const heading=p ? p.name : data.account_name;
     let note='';
     if(data.status==='unlinked') note='Your Discord account has no verified CVHL player claim yet.';
@@ -65,7 +90,12 @@
       (p ? '<div class="tp-grid"><section class="tp-card"><h3>'+(data.status==='training_camp'?'Training Camp (TC)':'Roster')+'</h3><dl><div><dt>Team</dt><dd>'+escape(team?.name || 'Unassigned')+'</dd></div><div><dt>Position</dt><dd>'+escape(p.position || 'Not listed')+'</dd></div><div><dt>Salary</dt><dd>'+escape(p.salary == null ? 'Not listed' : '$'+Number(p.salary).toLocaleString('en-US'))+'</dd></div><div><dt>Account</dt><dd>'+escape(data.account_name)+'</dd></div></dl></section>'+
       '<section class="tp-card"><h3>Regular season</h3><div class="tp-stat-grid">'+metrics.map(([label,value])=>'<div class="tp-stat"><strong>'+escape(value)+'</strong><span>'+escape(label)+'</span></div>').join('')+'</div></section>'+
       '<section class="tp-card"><h3>Player settings</h3><form data-test-preferences><label>Platform<select name="platform"><option value="">Select platform</option>'+['Xbox','PlayStation'].map(value=>'<option value="'+value+'"'+(prefs.platform===value?' selected':'')+'>'+value+'</option>').join('')+'</select></label><label>Preferred positions<input name="positions" maxlength="80" placeholder="C, RW" value="'+escape(prefs.positions || '')+'"></label><label>Stream URL<input name="stream_url" type="url" maxlength="300" placeholder="https://twitch.tv/yourchannel" value="'+escape(prefs.stream_url || '')+'"></label><button class="tp-button" type="submit">Save settings</button><p class="tp-muted" role="status" data-test-message></p></form></section>'+
-      '<section class="tp-card"><h3>Upcoming games & availability</h3>'+(games.length ? '<ul class="tp-games">'+games.slice(0,6).map(game=>'<li><span>'+escape(niceTime(game.starts_at))+'<br><strong>'+escape((game.home_team_id===p.team_id ? 'vs ' : '@ ')+game.opponent_name)+'</strong></span><label class="tp-response">Availability<select data-test-game="'+escape(game.id)+'"'+(game.status!=='scheduled'?' disabled':'')+'>'+[['none','No response'],['available','Available'],['unavailable','Unavailable']].map(([value,label])=>'<option value="'+value+'"'+((availability[game.id] || 'none')===value?' selected':'')+'>'+label+'</option>').join('')+'</select></label></li>').join('')+'</ul>' : '<p class="tp-muted">No upcoming games on the test schedule.</p>')+'<p class="tp-muted" role="status" data-availability-message></p></section>'+
+      '<section class="tp-card"><div class="tp-availability-header"><h3>Upcoming games & availability</h3>'+
+      (weeks.length ? '<label class="tp-week-picker">Week <select data-week-select aria-label="Choose schedule week">'+
+        weeks.map(item=>'<option value="'+item.number+'"'+(item.number===week?' selected':'')+'>Week '+item.number+
+          ' · '+escape(item.start)+' to '+escape(item.end)+'</option>').join('')+'</select></label>' : '')+
+      '</div><div data-week-games>'+(weeks.length ? weekGames(data,week) : '<p class="tp-muted">No games on the test schedule.</p>')+
+      '</div><p class="tp-muted" role="status" data-availability-message></p></section>'+
       '<section class="tp-card"><h3>Test profile</h3><p class="tp-muted">This page reads the separate database league. Your live CVHL profile and availability settings remain as they are.</p></section></div>' :
       '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>');
   }
@@ -113,14 +143,27 @@
     finally { button.disabled=false; }
   });
   panel.addEventListener('change',async event=>{
+    const weekSelect=event.target.closest('[data-week-select]');
+    if (weekSelect) {
+      panel.querySelector('[data-week-games]').innerHTML=weekGames(currentProfile,weekSelect.value);
+      panel.querySelector('[data-availability-message]').textContent='';
+      return;
+    }
     const select=event.target.closest('[data-test-game]');
     if (!select) return;
     const message=panel.querySelector('[data-availability-message]');
+    const choice=select.value, previous=select.dataset.savedStatus || 'none';
     select.disabled=true;
     message.textContent='Saving availability…';
-    try { await save('availability',{game_id:select.dataset.testGame,status:select.value},message); }
-    catch(error) { message.textContent=error.message || 'Could not save.'; }
-    finally { select.disabled=false; }
+    try {
+      await save('availability',{game_id:select.dataset.testGame,status:choice},message);
+      currentProfile.availability[select.dataset.testGame]=choice;
+      select.dataset.savedStatus=choice;
+      select.className='availability-'+choice;
+    } catch(error) {
+      select.value=previous;
+      message.textContent=error.message || 'Could not save.';
+    } finally { select.disabled=false; }
   });
   panel.addEventListener('click',async event=>{
     if(event.target.closest('[data-profile-login]'))await login();
