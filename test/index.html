@@ -1864,6 +1864,37 @@
   #page-players::before{width:190px;height:190px;right:-34px;top:-18px}
   #page-players .test-controls{padding:10px}
 }
+
+  /* Database test profile shares the league palette; account data remains separate. */
+  #page-profile{color:#f5faff;max-width:1120px;margin:auto}
+  #page-profile .section-title{color:#f5faff;border-color:#40c6ff}
+  .tp-hero{position:relative;overflow:hidden;border:1px solid #3573a2;border-radius:18px;
+    padding:28px;background:radial-gradient(circle at 90% 0%,#215587 0%,transparent 45%),
+    linear-gradient(145deg,#102d4e,#071b31);box-shadow:0 16px 36px #0006}
+  .tp-hero::after{content:"";position:absolute;right:-35px;top:-45px;width:270px;height:270px;
+    background:url("../CVHL/images/NHL%20Logo.png") center/contain no-repeat;opacity:.08;pointer-events:none}
+  .tp-hero>*{position:relative;z-index:1}
+  .tp-kicker{color:#77d8ff;text-transform:uppercase;letter-spacing:.14em;font-size:12px;font-weight:800}
+  .tp-hero h2{font:900 clamp(26px,4vw,42px) 'Manrope',sans-serif;margin:8px 0}
+  .tp-muted{color:#bad1e3;line-height:1.5}
+  .tp-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+  .tp-button{display:inline-flex;align-items:center;justify-content:center;background:#40c6ff;
+    border:1px solid #80dcff;border-radius:8px;padding:10px 16px;color:#071426;
+    font:800 14px 'Manrope',sans-serif;text-decoration:none;cursor:pointer}
+  .tp-button.secondary{background:#153452;color:#f5faff;border-color:#4d8db6}
+  .tp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
+  .tp-card{background:#102640;border:1px solid #315c7c;border-radius:14px;padding:20px;min-width:0}
+  .tp-card h3{font:800 18px 'Manrope',sans-serif;color:#e4f6ff;margin-bottom:12px}
+  .tp-card dl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tp-card dt{font-size:12px;color:#a9c9df;text-transform:uppercase;letter-spacing:.07em}
+  .tp-card dd{font-size:17px;font-weight:700;margin-top:3px;overflow-wrap:anywhere}
+  .tp-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .tp-stat{background:#193c60;padding:12px;border-radius:8px;text-align:center}
+  .tp-stat strong{display:block;font:900 23px 'Manrope',sans-serif;color:#fff}
+  .tp-stat span{font-size:12px;color:#b8ddf2}
+  .tp-games{list-style:none;display:grid;gap:8px}
+  .tp-games li{padding:10px 12px;background:#193c60;border-radius:8px;display:flex;justify-content:space-between;gap:12px}
+  @media(max-width:700px){.tp-hero{padding:20px}.tp-grid{grid-template-columns:1fr}.tp-stat-grid{grid-template-columns:repeat(2,1fr)}.tp-games li{display:block}}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../mobile-app.css?v=2">
@@ -1880,6 +1911,7 @@
     <button type="button" data-page="teams">Teams</button>
     <button type="button" data-page="schedule">Schedule</button>
     <button type="button" data-page="games">Recent Games</button>
+    <button type="button" data-page="profile">My Profile</button>
   </nav>
   <button class="mobile-menu-toggle" type="button" aria-label="Open menu" aria-expanded="false">&#9776;</button>
 </header>
@@ -1893,6 +1925,7 @@
   <div class="page" id="page-teams"><div class="section-title">Team Rosters</div><div class="team-nav" id="team-nav"></div><div id="team-content"></div></div>
   <div class="page" id="page-schedule"><div class="section-title">Schedule</div><div class="controls test-controls"><span class="filter-label">Team:</span><select class="pos-filter" id="schedule-team"><option value="">All Teams</option></select><span class="filter-label">Phase:</span><select class="pos-filter" id="schedule-phase"><option value="regular">Regular Season</option><option value="playoff">Playoffs</option></select><span class="record-count" id="schedule-count"></span></div><div id="schedule-list"></div></div>
   <div class="page" id="page-games"><div class="section-title">Recent Games</div><div class="controls test-controls"><span class="filter-label">Team:</span><select class="pos-filter" id="game-team"><option value="">All Teams</option></select><span class="record-count" id="game-count"></span></div><div id="games-list"></div></div>
+<div class="page" id="page-profile"><div class="section-title">My Profile</div><div id="test-profile-content" role="status"></div></div>
 </main>
 <div class="modal-overlay" id="game-info-modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="game-info-title"><div class="modal-header"><div class="modal-name" id="game-info-title">Game</div><button type="button" class="modal-close" id="game-info-close" aria-label="Close game details">&#10005;</button></div><div class="modal-body" id="game-info-body"></div></div></div>
 <div class="modal-overlay" id="player-modal" aria-hidden="true"><div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-name"><div class="modal-header"><div class="modal-name" id="modal-name"></div><div class="modal-meta" id="modal-meta"></div><button type="button" class="modal-close" id="modal-close" aria-label="Close player card">&#10005;</button></div><div class="modal-body" id="modal-body"></div></div></div>
@@ -2069,7 +2102,7 @@
           fields.map(([,key])=>'<td>'+safe(stats?.[key]??(key==='games_played'?p.gp:undefined)??'–')+'</td>').join('')+'</tr>';
       }).join('')+'</tbody></table></div>';
   }
-  function openTeam(id) {
+  function openTeam(id, navigate=true) {
     currentTeam=id;
     const t=team(id);
     const [base,accent]=teamColors[t.abbr]||['#12355f','#46baf2'];
@@ -2099,12 +2132,12 @@
       '<div class="team-management">'+management+'</div>'+
       '<div class="subsection-label">Rostered Skaters <span class="subsection-note">'+skaters.length+' players</span></div>'+teamRosterTable(skaters)+
       '<div class="subsection-label">Rostered Goalies <span class="subsection-note">'+goalies.length+' players</span></div>'+teamRosterTable(goalies,true);
-    const nav=document.querySelector('#main-nav [data-page="teams"]');page('teams',nav);
+    if(navigate){const nav=document.querySelector('#main-nav [data-page="teams"]');page('teams',nav);}
   }
   function teams() {
     $('team-nav').innerHTML=data.teams.map(t=>'<button type="button" class="team-btn" data-team="'+safe(t.id)+'">'+logo(t,'team-btn-logo')+safe(t.abbr)+'</button>').join('');
     $('team-nav').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>openTeam(Number(b.dataset.team))));
-    if(data.teams.length){currentTeam=data.teams[0].id;openTeam(currentTeam);page('home',document.querySelector('#main-nav [data-page="home"]'))}
+    if(data.teams.length){currentTeam=data.teams[0].id;openTeam(currentTeam,false);if(!location.hash.startsWith('#profile'))page('home',document.querySelector('#main-nav [data-page="home"]'))}
     else $('team-content').innerHTML='<div class="loading">No teams yet.</div>';
   }
   function gameCard(g, result=false) {
@@ -2218,12 +2251,13 @@
     data.players.forEach(p=>{p.skater=projected.get(p.id+':regular:skater');p.goalie=projected.get(p.id+':regular:goalie');p.playoff_skater=projected.get(p.id+':playoff:skater');p.playoff_goalie=projected.get(p.id+':playoff:goalie');});
     choices('player-team');choices('schedule-team');choices('game-team');
     standings();players();goalies();teams();schedule();games();home();gameCarousel();
-    const target=location.hash.slice(1);
-    if(['home','standings','players','goalies','teams','schedule','games'].includes(target))page(target,document.querySelector('#main-nav [data-page="'+target+'"]'));
+    const target=location.hash.slice(1).split('?')[0];
+    if(['home','standings','players','goalies','teams','schedule','games','profile'].includes(target) && !location.hash.startsWith('#profile?code='))page(target,document.querySelector('#main-nav [data-page="'+target+'"]'));
   }).catch(e=>{$('home-content').innerHTML='<div class="loading">Could not load database test data: '+safe(e.message)+'<br><button type="button" id="retry-test-feed">Retry database connection</button></div>'; $('retry-test-feed').addEventListener('click',retryFeed);});
   }
   retryFeed();
 })();
 </script>
+<script defer src="profile.js?v=1"></script>
 </body>
 </html>
