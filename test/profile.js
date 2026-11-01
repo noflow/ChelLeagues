@@ -53,8 +53,8 @@
     const heading=p ? p.name : data.account_name;
     let note='';
     if(data.status==='unlinked') note='Your Discord account has no verified CVHL player claim yet.';
-    if(data.status==='missing') note='Your verified player is not on the current test roster yet.';
-    if(data.status==='ambiguous') note='More than one test player matches your verified name. Ask a league admin to resolve it.';
+    if(data.status==='missing') note='Your verified CVHL player, '+data.linked_name+', is not on the current test roster yet.';
+    if(data.status==='ambiguous') note='More than one test player matches '+data.linked_name+'. Ask a league admin to resolve it.';
     const regular=stats.find(s=>s.phase==='regular' && s.kind==='skater') || stats.find(s=>s.phase==='regular' && s.kind==='goalie');
     const isGoalie=regular?.kind==='goalie';
     const metrics=isGoalie ? [['GP',regular.games_played],['Wins',regular.wins],['Saves',regular.saves],['Save %',regular.save_pct]]
