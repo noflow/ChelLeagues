@@ -2030,6 +2030,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../mobile-app.css?v=2">
 <script defer src="../app.js"></script>
+<link rel="stylesheet" href="https://admin.chelleagues.com/static/website-design.css?v=2">
+<script src="https://admin.chelleagues.com/static/website-design.js?v=2"></script>
+<script src="database-sync.js?v=1"></script>
 </head>
 <body>
 <header>
@@ -2046,7 +2049,7 @@
   </nav>
   <button class="mobile-menu-toggle" type="button" aria-label="Open menu" aria-expanded="false">&#9776;</button>
 </header>
-<div class="test-banner">DATABASE TEST LEAGUE · <a href="../CVHL/">View the real CVHL website</a> · <a href="../">All leagues</a></div>
+<div class="test-banner">DATABASE TEST LEAGUE · <a href="../CVHL/">View the real CVHL website</a> · <a href="../">All leagues</a> · <span id="database-sync-status" role="status">Loading database…</span></div>
 <section class="score-bar" id="test-score-bar" aria-label="Game night matchups" hidden><div class="score-bar-inner"><div class="score-bar-heading"><strong id="test-score-heading">Game Night</strong><span id="test-score-date"></span></div><div class="score-bar-viewport" tabindex="0" aria-label="Game matchups; scroll to browse"><div class="score-bar-track" id="test-score-track"></div></div></div></section>
 <main>
   <div class="page active" id="page-home"><div class="section-title">Home</div><div id="home-content" class="loading">Loading test league…</div></div>
@@ -2065,7 +2068,6 @@
 (() => {
   'use strict';
   const endpoint = 'https://admin.chelleagues.com/api/database-test/cvhl';
-  const divisions = {EAST:['BOS','BUF','DET','NYR'],WEST:['DAL','LAK','SEA','UTA']};
   const logos = {BOS:'Boston Bruins.png',BUF:'Buffalo Sabres.png',DAL:'Dallas Stars.png',DET:'Detroit Red Wings.png',LAK:'Los Angeles Kings.png',NYR:'New York Rangers.png',SEA:'Seattle Kraken.png',UTA:'Utah Mammoth.png'};
   const teamColors = {
     BOS:['#3a270a','#f6c24f'], BUF:['#092b59','#d33d42'],
@@ -2124,6 +2126,7 @@
   $('player-modal').addEventListener('click',e=>{if(e.target===$('player-modal'))closePlayer()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('player-modal').classList.contains('open'))closePlayer()});
   function logo(t, cls='test-logo') {
+    if(t.logo_url && /^https:\/\//i.test(t.logo_url))return '<img class="'+cls+'" src="'+safe(t.logo_url)+'" alt="" loading="lazy">';
     const file = logos[t.abbr];
     return file ? '<img class="'+cls+'" src="../CVHL/images/'+encodeURIComponent(file)+'" alt="" loading="lazy">' : '<span class="badge">'+safe(t.abbr)+'</span>';
   }
@@ -2143,8 +2146,11 @@
   });
   function choices(id) {
     const select=$(id);
+    const selected=select.value;
+    select.replaceChildren(new Option('All Teams',''));
     data.teams.forEach(t => select.add(new Option(t.name,t.id)));
-    select.addEventListener('change', id==='player-team' ? players : id==='game-team' ? games : schedule);
+    select.value=data.teams.some(t=>String(t.id)===selected)?selected:'';
+    select.onchange=id==='player-team'?players:id==='game-team'?games:schedule;
   }
   function standingsRows() {
     const rows=new Map(data.teams.map(t=>[t.id,{...t,gp:0,w:0,l:0,otl:0,t:0,pts:0,gf:0,ga:0}]));
@@ -2162,7 +2168,7 @@
   function standings() {
     const rows=standingsRows();
     const configured=(data.divisions||[]).filter(d=>data.teams.some(t=>t.division_id===d.id));
-    const groups=configured.length?configured.map(d=>[d.name,rows.filter(r=>r.division_id===d.id)]):Object.entries(divisions).map(([name,abbrs])=>[name,rows.filter(r=>abbrs.includes(r.abbr))]);
+    const groups=configured.length?configured.map(d=>[d.name,rows.filter(r=>r.division_id===d.id)]):[['LEAGUE STANDINGS',rows]];
     const assigned=new Set(groups.flatMap(([,teams])=>teams.map(t=>t.id)));
     const others=rows.filter(r=>!assigned.has(r.id));
     if(others.length)groups.push(['OTHER TEAMS',others]);
@@ -2270,7 +2276,7 @@
   function teams() {
     $('team-nav').innerHTML=data.teams.map(t=>'<button type="button" class="team-btn" data-team="'+safe(t.id)+'">'+logo(t,'team-btn-logo')+safe(t.abbr)+'</button>').join('');
     $('team-nav').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>openTeam(Number(b.dataset.team))));
-    if(data.teams.length){currentTeam=data.teams[0].id;openTeam(currentTeam,false);if(!location.hash.startsWith('#profile'))page('home',document.querySelector('#main-nav [data-page="home"]'))}
+    if(data.teams.length){currentTeam=data.teams.some(t=>t.id===currentTeam)?currentTeam:data.teams[0].id;openTeam(currentTeam,false);}
     else $('team-content').innerHTML='<div class="loading">No teams yet.</div>';
   }
   function gameCard(g, result=false) {
@@ -2278,7 +2284,7 @@
     const awayPalette=teamColors[away.abbr]||['#173c43','#5ad4cf'];
     const homePalette=teamColors[home.abbr]||['#173c43','#5ad4cf'];
     const colors='--away-color:'+awayPalette[0]+';--away-accent:'+awayPalette[1]+';--home-color:'+homePalette[0]+';--home-accent:'+homePalette[1];
-    return '<div class="game-card" style="'+colors+'" data-game-id="'+safe(g.id)+'" tabindex="0" role="button" aria-label="View '+safe(away.name)+' vs '+safe(home.name)+' game details"><div class="game-date">'+safe(time(g.starts_at))+'</div><div class="game-teams"><div class="game-team">'+logo(away,'game-team-logo')+'<div class="game-team-name">'+safe(away.name)+'</div><div class="game-badge"><span class="badge">AWAY</span></div></div><div class="game-score-wrap"><div class="'+(result?'test-game-score':'game-sep')+'">'+(result?g.away_score+' – '+g.home_score:'@')+'</div></div><div class="game-team">'+logo(home,'game-team-logo')+'<div class="game-team-name">'+safe(home.name)+'</div><div class="game-badge"><span class="badge">HOME</span></div></div></div><div class="game-card-actions"><span class="badge">'+safe(g.phase)+'</span>'+(g.game_code?'<span class="badge game-code">'+safe(g.game_code)+'</span>':'')+'</div></div>';
+    return '<div class="game-card" data-away="'+safe(away.abbr)+'" data-home="'+safe(home.abbr)+'" style="'+colors+'" data-game-id="'+safe(g.id)+'" tabindex="0" role="button" aria-label="View '+safe(away.name)+' vs '+safe(home.name)+' game details"><div class="game-date">'+safe(time(g.starts_at))+'</div><div class="game-teams"><div class="game-team">'+logo(away,'game-team-logo')+'<div class="game-team-name">'+safe(away.name)+'</div><div class="game-badge"><span class="badge">AWAY</span></div></div><div class="game-score-wrap"><div class="'+(result?'test-game-score':'game-sep')+'">'+(result?g.away_score+' – '+g.home_score:'@')+'</div></div><div class="game-team">'+logo(home,'game-team-logo')+'<div class="game-team-name">'+safe(home.name)+'</div><div class="game-badge"><span class="badge">HOME</span></div></div></div><div class="game-card-actions"><span class="badge">'+safe(g.phase)+'</span>'+(g.game_code?'<span class="badge game-code">'+safe(g.game_code)+'</span>':'')+'</div></div>';
   }
   function grouped(items, results=false) {
     if(!items.length)return '<div class="loading">No '+(results?'final games':'scheduled games')+' yet.</div>';
@@ -2379,19 +2385,39 @@
       } finally { clearTimeout(timer); }
     }
   }
-  function retryFeed() {
-    $('home-content').innerHTML='<div class="loading">Loading test league…</div>';
-    loadFeed().then(result=>{
-    data=result;
-    const projected=new Map((data.published_player_stats||[]).map(s=>[s.player_id+':'+s.phase+':'+s.kind,s]));
-    data.players.forEach(p=>{p.skater=projected.get(p.id+':regular:skater');p.goalie=projected.get(p.id+':regular:goalie');p.playoff_skater=projected.get(p.id+':playoff:skater');p.playoff_goalie=projected.get(p.id+':playoff:goalie');});
-    data.players.push(...(data.training_camp_players||[]));
-    choices('player-team');choices('schedule-team');choices('game-team');
-    standings();players();goalies();teams();schedule();games();home();gameCarousel();
-    const target=location.hash.slice(1).split('?')[0];
-    if(['home','standings','players','goalies','teams','schedule','games','profile'].includes(target) && !location.hash.startsWith('#profile?code='))page(target,document.querySelector('#main-nav [data-page="'+target+'"]'));
-  }).catch(e=>{$('home-content').innerHTML='<div class="loading">Could not load database test data: '+safe(e.message)+'<br><button type="button" id="retry-test-feed">Retry database connection</button></div>'; $('retry-test-feed').addEventListener('click',retryFeed);});
+  const synchronizer=window.ChelDatabaseSync.create({
+    load:loadFeed,
+    readState:()=>({hash:location.hash,scrollX:window.scrollX,scrollY:window.scrollY}),
+    commit:(result,view,{background})=>{
+      data=result;
+      const projected=new Map((data.published_player_stats||[]).map(s=>[s.player_id+':'+s.phase+':'+s.kind,s]));
+      data.players.forEach(p=>{p.skater=projected.get(p.id+':regular:skater');p.goalie=projected.get(p.id+':regular:goalie');p.playoff_skater=projected.get(p.id+':playoff:skater');p.playoff_goalie=projected.get(p.id+':playoff:goalie');});
+      data.players.push(...(data.training_camp_players||[]));
+      choices('player-team');choices('schedule-team');choices('game-team');
+      standings();players();goalies();teams();schedule();games();home();gameCarousel();
+      window.ChelDesign?.apply(data.website_design);
+      let target=view.hash.slice(1).split('?')[0]||'home';
+      const nav=document.querySelector('#main-nav [data-page="'+target+'"]');
+      if(nav?.hidden && target!=='profile')target='home';
+      if(['home','standings','players','goalies','teams','schedule','games','profile'].includes(target)&&!view.hash.startsWith('#profile?code='))
+        page(target,document.querySelector('#main-nav [data-page="'+target+'"]'));
+      if(background)window.scrollTo(view.scrollX,view.scrollY);
+      $('database-sync-status').textContent='Database connected · updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    },
+    onError:(error,{hasData})=>{
+      if(hasData){$('database-sync-status').textContent='Refresh unavailable · showing last loaded data';return;}
+      $('home-content').innerHTML='<div class="loading">Could not load database test data: '+safe(error.message)+'<br><button type="button" id="retry-test-feed">Retry database connection</button></div>';
+      $('retry-test-feed').addEventListener('click',()=>retryFeed());
+      $('database-sync-status').textContent='Database connection unavailable';
+    }
+  });
+  function retryFeed(){return synchronizer.refresh();}
+  function refreshVisibleFeed(){
+    if(!document.hidden&&!document.querySelector('.modal-overlay.open')&&!location.hash.startsWith('#profile'))
+      synchronizer.refresh({background:true});
   }
+  setInterval(refreshVisibleFeed,60000);
+  document.addEventListener('visibilitychange',refreshVisibleFeed);
   retryFeed();
 })();
 </script>
