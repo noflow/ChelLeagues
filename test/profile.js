@@ -106,7 +106,10 @@
     const teams=data.management?.teams || [];
     if(!teams.length) return '';
     return '<section class="tp-card tp-management"><h3>Team management</h3><p class="tp-muted">Private availability for your assigned team. Responses update when you refresh this profile.</p>'+
-      teams.map(team=>'<div class="tp-manager-team"><h4>'+escape(team.name)+' · '+escape(team.role.toUpperCase())+'</h4>'+
+      (teams.length>1 ? '<label class="tp-manager-picker">Team <select data-management-team aria-label="Management team">'+
+        teams.map(team=>'<option value="'+escape(team.id)+'">'+escape(team.name)+'</option>').join('')+
+        '</select></label>' : '')+
+      teams.map((team,index)=>'<div class="tp-manager-team" data-management-panel="'+escape(team.id)+'"'+(index?' hidden':'')+'><h4>'+escape(team.name)+' · '+escape(team.role.toUpperCase())+'</h4>'+
         (team.games.length ? team.games.map(game=>{
           const counts={available:0,unavailable:0,none:0};
           game.players.forEach(player=>{counts[player.status]=(counts[player.status] || 0)+1;});
@@ -194,6 +197,13 @@
     finally { button.disabled=false; }
   });
   panel.addEventListener('change',async event=>{
+    const managerSelect=event.target.closest('[data-management-team]');
+    if(managerSelect){
+      panel.querySelectorAll('[data-management-panel]').forEach(item=>{
+        item.hidden=item.dataset.managementPanel!==managerSelect.value;
+      });
+      return;
+    }
     const weekSelect=event.target.closest('[data-week-select]');
     if (weekSelect) {
       panel.querySelector('[data-week-games]').innerHTML=weekGames(currentProfile,weekSelect.value);
