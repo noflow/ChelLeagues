@@ -102,27 +102,56 @@
         ['Points / GP',regular?.points_per_game],['Shots',regular?.shots ?? p?.shots ?? 0],
         ['Shot %',regular?.shot_pct]];
   }
+  let activeProfileTab='player';
+  let managerTeamId='';
+  let managerWeek='';
+  let managerCollapsed=false;
+  const roleLabel={team_manager:'Team manager',league_admin:'League admin',owner:'Owner',gm:'GM',agm:'AGM'};
+  function managerWeeks(data,team) {
+    const numbers=[...new Set(team.games.map(game=>Number(game.week_number)).filter(Boolean))].sort((a,b)=>a-b);
+    return numbers.map(number=>data.schedule_weeks?.find(item=>item.number===number) || {number});
+  }
+  function managerGames(team,week) {
+    const games=team.games.filter(game=>Number(game.week_number)===Number(week));
+    if(!games.length) return '<p class="tp-muted">No upcoming games for this team this week.</p>';
+    return games.map(game=>{
+      const counts={available:0,unavailable:0,none:0};
+      game.players.forEach(player=>{counts[player.status]=(counts[player.status] || 0)+1;});
+      return '<details class="tp-manager-game"><summary>'+escape(niceTime(game.starts_at))+' · '+
+        escape((game.home?'vs ':'@ ')+game.opponent_name)+
+        '<span class="tp-manager-counts"><b class="available">'+counts.available+' available</b><b class="unavailable">'+counts.unavailable+
+        ' unavailable</b><b>'+counts.none+' no response</b></span></summary>'+
+        '<div class="tp-manager-roster">'+game.players.map(player=>
+          '<div><span>'+escape(player.name)+' <small>'+escape(player.section)+(player.position?' · '+escape(player.position):'')+
+          '</small></span><strong class="availability-'+escape(player.status)+'">'+
+          escape(({available:'Available',unavailable:'Unavailable',none:'No response'})[player.status] || 'No response')+
+          '</strong></div>').join('')+'</div></details>';
+    }).join('');
+  }
+  function managerControls(data,team) {
+    const weeks=managerWeeks(data,team);
+    if(!weeks.some(item=>String(item.number)===String(managerWeek))) managerWeek=String(weeks[0]?.number || '');
+    const weekSelect=weeks.length ? '<label>Week <select data-management-week aria-label="Management week">'+
+      weeks.map(item=>'<option value="'+item.number+'"'+(String(item.number)===managerWeek?' selected':'')+'>Week '+item.number+
+        (item.start?' · '+escape(item.start)+' to '+escape(item.end):'')+'</option>').join('')+
+      '</select></label>' : '';
+    return '<div class="tp-manager-toolbar">'+weekSelect+
+      '<button type="button" class="tp-button secondary" data-management-toggle aria-expanded="'+(!managerCollapsed)+'">'+
+      (managerCollapsed?'Show games':'Minimize games')+'</button></div>'+
+      '<div data-management-games'+(managerCollapsed?' hidden':'')+'>'+
+      (weeks.length?managerGames(team,managerWeek):'<p class="tp-muted">No upcoming games for this team.</p>')+'</div>';
+  }
   function management(data) {
     const teams=data.management?.teams || [];
     if(!teams.length) return '';
+    if(!teams.some(team=>String(team.id)===managerTeamId)) managerTeamId=String(teams[0].id);
+    const selected=teams.find(team=>String(team.id)===managerTeamId);
     return '<section class="tp-card tp-management"><h3>Team management</h3><p class="tp-muted">Private availability for your assigned team. Responses update when you refresh this profile.</p>'+
       (teams.length>1 ? '<label class="tp-manager-picker">Team <select data-management-team aria-label="Management team">'+
-        teams.map(team=>'<option value="'+escape(team.id)+'">'+escape(team.name)+'</option>').join('')+
+        teams.map(team=>'<option value="'+escape(team.id)+'"'+(String(team.id)===managerTeamId?' selected':'')+'>'+escape(team.name)+'</option>').join('')+
         '</select></label>' : '')+
-      teams.map((team,index)=>'<div class="tp-manager-team" data-management-panel="'+escape(team.id)+'"'+(index?' hidden':'')+'><h4>'+escape(team.name)+' · '+escape(({team_manager:'Team manager',league_admin:'League admin',owner:'Owner',gm:'GM',agm:'AGM'})[team.role] || team.role)+'</h4>'+
-        (team.games.length ? team.games.map(game=>{
-          const counts={available:0,unavailable:0,none:0};
-          game.players.forEach(player=>{counts[player.status]=(counts[player.status] || 0)+1;});
-          return '<details class="tp-manager-game"><summary>'+escape(niceTime(game.starts_at))+' · '+
-            escape((game.home?'vs ':'@ ')+game.opponent_name)+
-            '<span class="tp-manager-counts"><b class="available">'+counts.available+' available</b><b class="unavailable">'+counts.unavailable+
-            ' unavailable</b><b>'+counts.none+' no response</b></span></summary>'+
-            '<div class="tp-manager-roster">'+game.players.map(player=>
-              '<div><span>'+escape(player.name)+' <small>'+escape(player.section)+(player.position?' · '+escape(player.position):'')+
-              '</small></span><strong class="availability-'+escape(player.status)+'">'+
-              escape(({available:'Available',unavailable:'Unavailable',none:'No response'})[player.status] || 'No response')+
-              '</strong></div>').join('')+'</div></details>';
-        }).join('') : '<p class="tp-muted">No upcoming games for this team.</p>')+'</div>').join('')+'</section>';
+      '<div class="tp-manager-team"><h4>'+escape(selected.name)+' · '+escape(roleLabel[selected.role] || selected.role)+'</h4>'+
+      '<div data-management-content>'+managerControls(data,selected)+'</div></div></section>';
   }
   function render(data) {
     currentProfile=data;
@@ -130,6 +159,8 @@
     const weeks=data.schedule_weeks || [];
     const week=selectedWeek(data);
     const heading=p ? p.name : data.account_name;
+    const hasManagement=Boolean(data.management?.teams?.length);
+    if(!hasManagement)activeProfileTab='player';
     let note='';
     if(data.status==='unlinked') note='Your Discord account has no verified CVHL player claim yet.';
     if(data.status==='missing') note='Your verified CVHL player, '+data.linked_name+', is not on the current test roster yet.';
@@ -140,6 +171,10 @@
     panel.innerHTML='<div class="tp-hero"><p class="tp-kicker">CVHL database test · '+escape(data.season?.name || 'League')+'</p><h2>'+escape(heading)+'</h2>'+
       '<p class="tp-muted">'+(p ? (data.status==='training_camp' ? 'Training Camp (TC) with '+escape(team?.name || 'your team')+'. Your TC placement comes from the test database.' : 'Your roster and game totals below come from the test database.') : escape(note))+'</p>'+
       '<div class="tp-actions"><button class="tp-button secondary" type="button" data-profile-refresh>Refresh</button><button class="tp-button secondary" type="button" data-profile-logout>Sign out</button></div></div>'+
+      (hasManagement?'<div class="tp-profile-tabs" role="tablist" aria-label="Profile sections">'+
+        '<button type="button" role="tab" data-profile-tab="player" aria-selected="'+(activeProfileTab==='player')+'">My Profile</button>'+
+        '<button type="button" role="tab" data-profile-tab="management" aria-selected="'+(activeProfileTab==='management')+'">Team Management</button></div>':'')+
+      '<div data-profile-panel="player"'+(activeProfileTab==='player'?'':' hidden')+'>'+
       (p ? '<div class="tp-grid"><section class="tp-card"><h3>'+(data.status==='training_camp'?'Training Camp (TC)':'Roster')+'</h3><dl><div><dt>Team</dt><dd>'+escape(team?.name || 'Unassigned')+'</dd></div><div><dt>Position</dt><dd>'+escape(p.position || 'Not listed')+'</dd></div><div><dt>Salary</dt><dd>'+escape(p.salary == null ? 'Not listed' : '$'+Number(p.salary).toLocaleString('en-US'))+'</dd></div><div><dt>Account</dt><dd>'+escape(data.account_name)+'</dd></div></dl></section>'+
       '<section class="tp-card"><h3>Regular season</h3><div class="tp-stat-grid">'+metrics.map(([label,value])=>'<div class="tp-stat"><strong>'+escape(value ?? '—')+'</strong><span>'+escape(label)+'</span></div>').join('')+'</div></section>'+
       '<section class="tp-card"><h3>Player settings</h3><form data-test-preferences><label>Platform<select name="platform"><option value="">Select platform</option>'+['Xbox','PlayStation'].map(value=>'<option value="'+value+'"'+(prefs.platform===value?' selected':'')+'>'+value+'</option>').join('')+'</select></label><label>Preferred positions<input name="positions" maxlength="80" placeholder="C, RW" value="'+escape(prefs.positions || '')+'"></label><label>Stream URL<input name="stream_url" type="url" maxlength="300" placeholder="https://twitch.tv/yourchannel" value="'+escape(prefs.stream_url || '')+'"></label><button class="tp-button" type="submit">Save settings</button><p class="tp-muted" role="status" data-test-message></p></form></section>'+
@@ -149,9 +184,10 @@
           ' · '+escape(item.start)+' to '+escape(item.end)+'</option>').join('')+'</select></label>' : '')+
       '</div><div data-week-games>'+(weeks.length ? weekGames(data,week) : '<p class="tp-muted">No games on the test schedule.</p>')+
       '</div><p class="tp-muted" role="status" data-availability-message></p></section>'+
-      '<section class="tp-card"><h3>Recent team results</h3>'+results(data)+'</section>'+management(data)+
+      '<section class="tp-card"><h3>Recent team results</h3>'+results(data)+'</section>'+
       '<section class="tp-card"><h3>Test profile</h3><p class="tp-muted">This page reads the separate database league. Your live CVHL profile and availability settings remain as they are.</p></section></div>' :
-      '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>');
+      '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>')+
+      '</div>'+(hasManagement?'<div data-profile-panel="management"'+(activeProfileTab==='management'?'':' hidden')+'>'+management(data)+'</div>':'');
   }
   async function load() {
     if (!pageActive() || loading) return;
@@ -199,9 +235,19 @@
   panel.addEventListener('change',async event=>{
     const managerSelect=event.target.closest('[data-management-team]');
     if(managerSelect){
-      panel.querySelectorAll('[data-management-panel]').forEach(item=>{
-        item.hidden=item.dataset.managementPanel!==managerSelect.value;
-      });
+      managerTeamId=managerSelect.value;
+      managerWeek='';
+      const team=currentProfile.management.teams.find(item=>String(item.id)===managerTeamId);
+      const section=panel.querySelector('.tp-manager-team');
+      section.querySelector('h4').textContent=team.name+' · '+(roleLabel[team.role] || team.role);
+      section.querySelector('[data-management-content]').innerHTML=managerControls(currentProfile,team);
+      return;
+    }
+    const managerWeekSelect=event.target.closest('[data-management-week]');
+    if(managerWeekSelect){
+      managerWeek=managerWeekSelect.value;
+      const team=currentProfile.management.teams.find(item=>String(item.id)===managerTeamId);
+      panel.querySelector('[data-management-games]').innerHTML=managerGames(team,managerWeek);
       return;
     }
     const weekSelect=event.target.closest('[data-week-select]');
@@ -228,6 +274,23 @@
     } finally { select.disabled=false; }
   });
   panel.addEventListener('click',async event=>{
+    const profileTab=event.target.closest('[data-profile-tab]');
+    if(profileTab){
+      activeProfileTab=profileTab.dataset.profileTab;
+      panel.querySelectorAll('[data-profile-tab]').forEach(button=>
+        button.setAttribute('aria-selected',String(button.dataset.profileTab===activeProfileTab)));
+      panel.querySelectorAll('[data-profile-panel]').forEach(section=>
+        section.hidden=section.dataset.profilePanel!==activeProfileTab);
+      return;
+    }
+    const managerToggle=event.target.closest('[data-management-toggle]');
+    if(managerToggle){
+      managerCollapsed=!managerCollapsed;
+      panel.querySelector('[data-management-games]').hidden=managerCollapsed;
+      managerToggle.textContent=managerCollapsed?'Show games':'Minimize games';
+      managerToggle.setAttribute('aria-expanded',String(!managerCollapsed));
+      return;
+    }
     const quick=event.target.closest('[data-quick-game]');
     if(quick){
       const select=panel.querySelector('[data-test-game="'+quick.dataset.quickGame+'"]');
