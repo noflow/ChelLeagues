@@ -109,7 +109,7 @@
       (teams.length>1 ? '<label class="tp-manager-picker">Team <select data-management-team aria-label="Management team">'+
         teams.map(team=>'<option value="'+escape(team.id)+'">'+escape(team.name)+'</option>').join('')+
         '</select></label>' : '')+
-      teams.map((team,index)=>'<div class="tp-manager-team" data-management-panel="'+escape(team.id)+'"'+(index?' hidden':'')+'><h4>'+escape(team.name)+' · '+escape(team.role.toUpperCase())+'</h4>'+
+      teams.map((team,index)=>'<div class="tp-manager-team" data-management-panel="'+escape(team.id)+'"'+(index?' hidden':'')+'><h4>'+escape(team.name)+' · '+escape(({team_manager:'Team manager',league_admin:'League admin',owner:'Owner',gm:'GM',agm:'AGM'})[team.role] || team.role)+'</h4>'+
         (team.games.length ? team.games.map(game=>{
           const counts={available:0,unavailable:0,none:0};
           game.players.forEach(player=>{counts[player.status]=(counts[player.status] || 0)+1;});
