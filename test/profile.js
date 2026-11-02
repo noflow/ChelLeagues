@@ -102,6 +102,25 @@
         ['Points / GP',regular?.points_per_game],['Shots',regular?.shots ?? p?.shots ?? 0],
         ['Shot %',regular?.shot_pct]];
   }
+  function management(data) {
+    const teams=data.management?.teams || [];
+    if(!teams.length) return '';
+    return '<section class="tp-card tp-management"><h3>Team management</h3><p class="tp-muted">Private availability for your assigned team. Responses update when you refresh this profile.</p>'+
+      teams.map(team=>'<div class="tp-manager-team"><h4>'+escape(team.name)+' · '+escape(team.role.toUpperCase())+'</h4>'+
+        (team.games.length ? team.games.map(game=>{
+          const counts={available:0,unavailable:0,none:0};
+          game.players.forEach(player=>{counts[player.status]=(counts[player.status] || 0)+1;});
+          return '<details class="tp-manager-game"><summary>'+escape(niceTime(game.starts_at))+' · '+
+            escape((game.home?'vs ':'@ ')+game.opponent_name)+
+            '<span class="tp-manager-counts"><b class="available">'+counts.available+' available</b><b class="unavailable">'+counts.unavailable+
+            ' unavailable</b><b>'+counts.none+' no response</b></span></summary>'+
+            '<div class="tp-manager-roster">'+game.players.map(player=>
+              '<div><span>'+escape(player.name)+' <small>'+escape(player.section)+(player.position?' · '+escape(player.position):'')+
+              '</small></span><strong class="availability-'+escape(player.status)+'">'+
+              escape(({available:'Available',unavailable:'Unavailable',none:'No response'})[player.status] || 'No response')+
+              '</strong></div>').join('')+'</div></details>';
+        }).join('') : '<p class="tp-muted">No upcoming games for this team.</p>')+'</div>').join('')+'</section>';
+  }
   function render(data) {
     currentProfile=data;
     const p=data.player, team=data.team, stats=data.stats || []; const prefs=data.preferences || {};
@@ -127,7 +146,7 @@
           ' · '+escape(item.start)+' to '+escape(item.end)+'</option>').join('')+'</select></label>' : '')+
       '</div><div data-week-games>'+(weeks.length ? weekGames(data,week) : '<p class="tp-muted">No games on the test schedule.</p>')+
       '</div><p class="tp-muted" role="status" data-availability-message></p></section>'+
-      '<section class="tp-card"><h3>Recent team results</h3>'+results(data)+'</section>'+
+      '<section class="tp-card"><h3>Recent team results</h3>'+results(data)+'</section>'+management(data)+
       '<section class="tp-card"><h3>Test profile</h3><p class="tp-muted">This page reads the separate database league. Your live CVHL profile and availability settings remain as they are.</p></section></div>' :
       '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>');
   }
