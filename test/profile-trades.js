@@ -12,10 +12,12 @@
   const teamName=id=>data?.teams.find(t=>t.id===Number(id))?.name || 'Team';
   function choices(id,side){
     if(!id)return '<fieldset class="tp-trade-assets"><legend>Other team sends</legend><p class="tp-muted">Choose the other team to see its players.</p></fieldset>';
-    return '<fieldset class="tp-trade-assets"><legend>'+esc(teamName(id))+' sends</legend>'+
+    const future=data.pick_ledger?.enabled?(data.pick_ledger.picks.filter(p=>p.owner_team===Number(id)).map(p=>'<label class="tp-trade-choice"><input type="checkbox" name="picks_'+side+'" value="'+esc(p.id)+'"><span><strong>'+esc(p.label)+'</strong><small>Future draft pick</small></span></label>').join('') || '<p class="tp-muted">No available future picks.</p>'):'<p class="tp-muted">Future-pick trading is disabled.</p>';
+    return '<fieldset class="tp-trade-assets"><legend>'+esc(teamName(id))+' sends</legend><h4>Future picks</h4>'+future+'<h4>Roster & training camp</h4>'+
       (data.players.filter(p=>p.team_id===Number(id)).map(p=>'<label class="tp-trade-choice"><input type="checkbox" name="players_'+side+'" value="'+p.id+'"><span><strong>'+esc(p.name)+'</strong><small>'+esc(p.section)+' · '+esc(money(p.salary))+'</small></span></label>').join('') || '<p class="tp-muted">No tradable players on this team.</p>')+'</fieldset>';
   }
   function offerCard(offer,review){
+    const pickText=rows=>(rows || []).map(p=>'<br>'+esc(p.label)+' <small>(Draft pick)</small>').join('');
     const packageText=rows=>rows.map(p=>esc(p.name)+' <small>('+esc(p.section)+' · '+esc(money(p.salary))+')</small>').join('<br>');
     let form='';
     const fields=hidden('season_id',data.season.id)+hidden('team_id',review?offer.proposing_team:data.team_id)+hidden('offer_id',offer.id)+hidden('revision',offer.revision);
@@ -23,7 +25,7 @@
       '<label>League note<textarea name="admin_note" maxlength="1000" rows="2"></textarea></label><div class="tp-actions"><button class="tp-button" name="trade_action" value="approve">Approve and apply trade</button><button class="tp-button secondary" name="trade_action" value="reject">Reject trade</button></div></form>';
     else if(!isReview() && !review && offer.status==='pending_team')form='<form data-test-trade-action>'+fields+'<div class="tp-actions">'+
       (offer.receiving_team===data.team_id?'<button class="tp-button" name="trade_action" value="accept">Accept offer</button><button class="tp-button secondary" name="trade_action" value="decline">Decline offer</button>':'<button class="tp-button secondary" name="trade_action" value="cancel">Cancel offer</button>')+'</div></form>';
-    return '<article class="tp-card tp-trade-offer"><h4>'+esc(teamName(offer.proposing_team))+' ↔ '+esc(teamName(offer.receiving_team))+'</h4><p class="tp-trade-status">'+esc(offer.status_label)+'</p><div class="tp-trade-columns"><section><strong>'+esc(teamName(offer.proposing_team))+' sends</strong><p>'+packageText(offer.assets_a)+'</p></section><section><strong>'+esc(teamName(offer.receiving_team))+' sends</strong><p>'+packageText(offer.assets_b)+'</p></section></div>'+
+    return '<article class="tp-card tp-trade-offer"><h4>'+esc(teamName(offer.proposing_team))+' ↔ '+esc(teamName(offer.receiving_team))+'</h4><p class="tp-trade-status">'+esc(offer.status_label)+'</p><div class="tp-trade-columns"><section><strong>'+esc(teamName(offer.proposing_team))+' sends</strong><p>'+packageText(offer.assets_a)+pickText(offer.picks_a)+'</p></section><section><strong>'+esc(teamName(offer.receiving_team))+' sends</strong><p>'+packageText(offer.assets_b)+pickText(offer.picks_b)+'</p></section></div>'+
       (offer.summary.cap!=null?'<p class="tp-muted">Salary after: '+offer.summary.teams.map(t=>esc(teamName(t.id))+' '+esc(money(t.after))).join(' · ')+' · Cap '+esc(money(offer.summary.cap))+'</p>':'')+
       (offer.note?'<p class="tp-trade-note">Offer note: '+esc(offer.note)+'</p>':'')+
       '<p class="tp-muted">Proposed by '+esc(offer.proposed_by)+(offer.decided_by?' · Team decision by '+esc(offer.decided_by):'')+(offer.reviewed_by?' · Reviewed by '+esc(offer.reviewed_by):'')+'</p>'+
@@ -41,11 +43,18 @@
     target.innerHTML='<section class="tp-card"><h3>'+(reviews?'Trade Approvals':'Team trades')+'</h3><p class="tp-muted">Both teams agree first. League approval applies the trade to the test rosters.</p>'+
       (!reviews?'<label class="tp-trade-team-label">Your team<select data-test-trade-team>'+data.managed_teams.map(t=>'<option value="'+t.id+'"'+(t.id===data.team_id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>':'')+
       '<button class="tp-button secondary" type="button" data-test-trade-refresh>Refresh status</button><p class="tp-muted" data-test-trade-message role="status">Offers update every 15 seconds.</p></section>'+
-      (!reviews?'<section class="tp-card"><h3>Propose a trade</h3><p class="tp-muted">Player and training-camp trades. Future-pick trading is not enabled in the test league.</p><form data-test-trade-action data-trade-composer>'+hidden('trade_action','propose')+hidden('season_id',data.season.id)+hidden('team_id',data.team_id)+
-        '<label class="tp-trade-partner">Trade with<select name="receiving_team" data-test-trade-receiver required><option value="">Choose a team</option>'+data.teams.filter(t=>t.id!==data.team_id).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></label><div class="tp-trade-columns tp-trade-composer-columns"><section>'+choices(data.team_id,'a')+'</section><section><div data-test-trade-receiver-choices>'+choices('','b')+'</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="tp-muted">Select at least one player from each team. Players keep their salary and roster/TC section. Protected staff cannot be traded.</p><button class="tp-button" type="submit">Send trade offer</button></form></section>':'')+
-      '<div data-test-trade-history>'+history()+'</div>';
+      (!reviews?'<section class="tp-card"><h3>Propose a trade</h3><p class="tp-muted">Trade roster players, training-camp players and available future picks.</p><form data-test-trade-action data-trade-composer>'+hidden('trade_action','propose')+hidden('season_id',data.season.id)+hidden('team_id',data.team_id)+
+        '<label class="tp-trade-partner">Trade with<select name="receiving_team" data-test-trade-receiver required><option value="">Choose a team</option>'+data.teams.filter(t=>t.id!==data.team_id).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></label><div class="tp-trade-columns tp-trade-composer-columns"><section>'+choices(data.team_id,'a')+'</section><section><div data-test-trade-receiver-choices>'+choices('','b')+'</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="tp-muted">Select at least one player or future pick from each team. Players keep their salary and roster/TC section. Protected staff cannot be traded.</p><button class="tp-button" type="submit">Send trade offer</button></form></section>':'')+
+      (reviews?ledgerControls():'')+'<div data-test-trade-history>'+history()+'</div>';
   }
-  const rosterSignature=value=>JSON.stringify([value.players,value.rules]);
+  function ledgerControls(){
+    const ledger=data.pick_ledger || {},settings=ledger.settings,fields=hidden('season_id',data.season.id);
+    return '<section class="tp-card"><h3>Future draft picks</h3><p class="tp-muted">Create each future draft once. Each team receives one pick per round. Trading transfers ownership only after league approval. Reserved picks stay unavailable until the offer is completed or declined.</p>'+
+      '<form data-test-trade-action>'+fields+hidden('pick_action','save')+'<label>Pick trading<select name="enabled"><option value="no">Disabled</option><option value="yes"'+(settings?.enabled?' selected':'')+'>Enabled</option></select></label><button class="tp-button">Save pick settings</button></form>'+
+      '<form data-test-trade-action>'+fields+hidden('pick_action','create')+'<label>Future draft name<input name="label" maxlength="80" required placeholder="Example: Season 3 draft"></label><label>Rounds<input name="rounds" type="number" min="1" max="30" required></label><button class="tp-button">Create future picks</button></form>'+
+      (settings?'<p>Active draft: '+esc(settings.label)+'</p><details><summary>Advance to a new draft</summary><p class="tp-muted">Use when its roster season is active and before opening its snake draft. Match the draft round count to the ledger. This cannot be rewound.</p><form data-test-trade-action>'+fields+hidden('pick_action','activate')+'<label>Next active draft<select name="draft_id" required><option value="">Choose a later draft</option>'+ledger.drafts.filter(d=>d.ordinal>settings.ordinal).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.label)+' ('+d.rounds+' rounds)</option>').join('')+'</select></label><button class="tp-button">Activate draft for this season</button></form></details>':'')+'</section>';
+  }
+  const rosterSignature=value=>JSON.stringify([value.players,value.rules,value.pick_ledger]);
   async function refresh(background=false){
     if(!root() || loading || saving || (background && document.hidden))return;
     const current=generation;loading=true;
@@ -107,12 +116,13 @@
         const values=new URLSearchParams(new FormData(form));
         if(event.submitter?.name)values.set(event.submitter.name,event.submitter.value);
         const action=values.get('trade_action');
-        if(action==='approve' && !confirm('Approve this agreed trade and move the selected players on the test rosters?'))return;
+        if(values.get('pick_action')==='activate' && !confirm('Advance the test pick ledger to this draft? This cannot be rewound.'))return;
+        if(action==='approve' && !confirm('Approve this agreed trade and transfer the selected players and draft picks?'))return;
         const current=generation;saving=true;
         form.querySelectorAll('button').forEach(b=>b.disabled=true);
         const message=root().querySelector('[data-test-trade-message]');if(message)message.textContent='Saving test trade…';
         try{
-          const response=await fetch(service,{method:'POST',headers:{Authorization:'Bearer '+localStorage.getItem('chelleagues-session')},
+          const response=await fetch(values.has('pick_action')?service.replace('/trades','/pick-ledger'):service,{method:'POST',headers:{Authorization:'Bearer '+localStorage.getItem('chelleagues-session')},
             credentials:'omit',cache:'no-store',body:values,signal:AbortSignal.timeout(15000)});
           const result=await response.json();if(!response.ok)throw new Error(result.error || 'Could not save the trade.');
           if(current!==generation)return;
@@ -127,3 +137,4 @@
   function destroy(){generation++;if(timer)clearInterval(timer);timer=null;data=null;team='';active='';host=null;}
   window.ChelTestTrades={mount,show,destroy};
 })();
+

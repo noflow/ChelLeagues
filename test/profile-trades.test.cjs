@@ -18,9 +18,18 @@ const base={configured:true,season:{id:1},team_id:1,managed_teams:[{id:1,name:'N
 test('test trade form uses roster IDs, preserves multiple selections and escapes names',()=>{
   const html=render(base);
   assert.match(html,/&lt;Own&gt;/);assert.doesNotMatch(html,/<Own>/);
-  assert.match(html,/name="players_a" value="10"/);assert.match(html,/Future-pick trading is not enabled/);
+  assert.match(html,/name="players_a" value="10"/);assert.match(html,/Future-pick trading is disabled/);
   assert.ok(source.includes('new URLSearchParams(new FormData(form))'));
   assert.ok(source.includes('/test-profile/trades'));assert.ok(!source.includes('/action/trade-propose'));
+});
+test('future picks appear only while enabled, with history labels and admin controls',()=>{
+  const pick={id:'pick-1',owner_team:1,label:'Season 3 <Round 1>'};
+  let html=render({...base,pick_ledger:{enabled:true,picks:[pick]}});
+  assert.match(html,/name="picks_a" value="pick-1"/);assert.match(html,/Season 3 &lt;Round 1&gt;/);
+  html=render({...base,pick_ledger:{enabled:false,picks:[pick]}});
+  assert.doesNotMatch(html,/name="picks_a"/);
+  html=render({...base,offers:[{...offer,picks_a:[pick]}]},true);
+  assert.match(html,/Create future picks/);assert.match(html,/name="rounds"/);assert.match(html,/Season 3 &lt;Round 1&gt;/);
 });
 test('incoming team offers have accept/decline and outgoing offers have cancel',()=>{
   let html=render({...base,offers:[offer]});assert.match(html,/value="accept"/);assert.match(html,/value="decline"/);
