@@ -235,9 +235,11 @@
       paintShortlist();
       const message=panel.querySelector('[data-shortlist-status]');
       if(message)message.textContent='Team shortlist synced. '+(panel.querySelector('[data-shortlist-dirty="1"]')?'Your unsaved notes are kept.':'');
+      return true;
     } catch(error) {
       const message=panel.querySelector('[data-shortlist-status]');
       if(message)message.textContent=error.message || 'Sync failed. Retrying automatically.';
+      return false;
     } finally { shortlistBusy=false; }
   }
   async function saveShortlist(row) {
@@ -387,11 +389,24 @@
     if(teamSelect){
       if(shortlistBusy || panel.querySelector('[data-shortlist-dirty="1"]')){
         teamSelect.value=shortlistTeam;
-        panel.querySelector('[data-shortlist-status]').textContent='Save your notes before switching teams.';
+        panel.querySelector('[data-shortlist-status]').textContent=shortlistBusy?'Sync in progress. Please select the team again in a moment.':'Save your notes before switching teams.';
         return;
       }
+      const previous=shortlistTeam;
       shortlistTeam=teamSelect.value;
-      await refreshShortlist(true);
+      const controls=panel.querySelectorAll('.tp-shortlist-cell input,.tp-shortlist-cell select,.tp-shortlist-cell textarea,.tp-shortlist-cell button');
+      controls.forEach(input=>input.disabled=true);
+      teamSelect.disabled=true;
+      panel.querySelector('[data-shortlist-status]').textContent='Loading team shortlist…';
+      try {
+        if(!await refreshShortlist(true)){
+          shortlistTeam=previous;
+          teamSelect.value=previous;
+        }
+      } finally {
+        controls.forEach(input=>input.disabled=false);
+        teamSelect.disabled=false;
+      }
       return;
     }
     const scoutControl=event.target.closest('[data-shortlist-highlight],[data-shortlist-priority]');
