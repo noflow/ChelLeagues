@@ -57,7 +57,7 @@
       if(current!==generation)return;
       if(!response.ok){if(response.status===401 || response.status===403)data=null;throw new Error(next.error || 'Could not load test trades.');}
       const changed=data && rosterSignature(data)!==rosterSignature(next);
-      const previous=data;data=next;team=String(next.team_id || '');
+      const previous=data;data=next;if(!isReview())team=String(next.team_id || '');
       if(!background || !previous || !next.configured || previous.configured!==next.configured){composerStale=false;render();}
       else {
         const target=root();
@@ -83,8 +83,9 @@
     root().innerHTML='<section class="tp-card"><p class="tp-muted">Loading test trades…</p></section>';
     refresh();timer=setInterval(()=>refresh(true),15000);
   }
-  function mount(panel,tab){
+  function mount(panel,tab,preferredTeam){
     host=panel;
+    if(preferredTeam)team=String(preferredTeam);
     if(!bound.has(panel)){
       bound.add(panel);
       panel.addEventListener('input',event=>{

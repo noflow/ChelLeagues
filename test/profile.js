@@ -350,7 +350,7 @@
       (hasDraftPlayers?'<div data-profile-panel="draft"'+(activeProfileTab==='draft'?'':' hidden')+'>'+draftPlayers(data.draft_players)+'</div>':'')+
       (hasTrades?'<div data-profile-panel="trades"'+(activeProfileTab==='trades'?'':' hidden')+'><div data-test-trades></div></div>':'')+
       (hasTradeReviews?'<div data-profile-panel="trade-reviews"'+(activeProfileTab==='trade-reviews'?'':' hidden')+'><div data-test-trade-reviews></div></div>':'');
-    window.ChelTestTrades?.mount(panel,activeProfileTab);
+    window.ChelTestTrades?.mount(panel,activeProfileTab,data.team?.id);
     paintShortlist();
     if(data.draft_players?.enabled && data.draft_players?.shortlist?.teams?.length)
       shortlistTimer=setInterval(()=>refreshShortlist(),15000);
@@ -531,3 +531,4 @@
     load();
   }
 })();
+
