@@ -153,6 +153,33 @@
       '<div class="tp-manager-team"><h4>'+escape(selected.name)+' · '+escape(roleLabel[selected.role] || selected.role)+'</h4>'+
       '<div data-management-content>'+managerControls(data,selected)+'</div></div></section>';
   }
+
+  const draftDays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  function draftPlayers(list) {
+    return '<section class="tp-card"><h3>Draft Eligible Players</h3><p class="tp-muted">Approved players available for the draft.</p>'+
+      '<div class="tp-draft-filters"><label>Search<input type="search" data-draft-filter="search" placeholder="Player or gaming ID"></label>'+
+      '<label>Position<select data-draft-filter="position"><option value="">Any position</option>'+['LW','C','RW','LD','RD','G'].map(p=>'<option>'+p+'</option>').join('')+'</select></label>'+
+      '<label>Available day<select data-draft-filter="day"><option value="">Any day</option>'+list.game_days.map(day=>'<option value="'+day+'">'+draftDays[day]+'</option>').join('')+'</select></label></div>'+
+      '<p class="tp-muted" data-draft-count role="status">'+list.players.length+' players shown</p>'+
+      '<div class="tp-draft-scroll"><table class="tp-draft-table"><thead><tr>'+['Player','PSN / Xbox ID','Primary position','Secondary position','Availability'].map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+
+      list.players.map(p=>'<tr data-draft-player="'+escape(p.id)+'"><td><strong>'+escape(p.name)+'</strong></td><td>'+escape(p.gaming_id?((p.console==='psn'?'PSN: ':p.console==='xbox'?'Xbox: ':'')+p.gaming_id):'Not linked yet')+'</td><td>'+escape(p.primary)+'</td><td>'+escape(p.secondary || '—')+'</td><td>'+
+        escape(list.game_days.length===p.days.length&&list.game_days.every(d=>p.days.includes(d))?'All game days':p.days.map(d=>draftDays[d]).join(', '))+'</td></tr>').join('')+
+      '</tbody></table></div><p class="tp-muted" data-draft-empty'+(list.players.length?' hidden':'')+'>No draft eligible players match.</p></section>';
+  }
+  function filterDraftPlayers() {
+    const value=kind=>panel.querySelector('[data-draft-filter="'+kind+'"]')?.value || '';
+    const search=value('search').trim().toLowerCase(), position=value('position'), day=value('day');
+    let count=0;
+    panel.querySelectorAll('[data-draft-player]').forEach(row=>{
+      const player=currentProfile.draft_players.players.find(p=>String(p.id)===row.dataset.draftPlayer);
+      const show=(!search||(player.name+' '+(player.gaming_id || '')).toLowerCase().includes(search))&&
+        (!position||[player.primary,player.secondary].includes(position))&&(!day||player.days.includes(Number(day)));
+      row.hidden=!show;if(show)count++;
+    });
+    panel.querySelector('[data-draft-count]').textContent=count+' players shown';
+    panel.querySelector('[data-draft-empty]').hidden=count>0;
+  }
+
   function render(data) {
     currentProfile=data;
     const p=data.player, team=data.team, stats=data.stats || []; const prefs=data.preferences || {};
@@ -160,7 +187,8 @@
     const week=selectedWeek(data);
     const heading=p ? p.name : data.account_name;
     const hasManagement=Boolean(data.management?.teams?.length);
-    if(!hasManagement)activeProfileTab='player';
+    const hasDraftPlayers=Boolean(data.draft_players?.enabled);
+    if((activeProfileTab==='management'&&!hasManagement)||(activeProfileTab==='draft'&&!hasDraftPlayers))activeProfileTab='player';
     let note='';
     if(data.status==='unlinked') note='Your Discord account has no verified CVHL player claim yet.';
     if(data.status==='missing') note='Your verified CVHL player, '+data.linked_name+', is not on the current test roster yet.';
@@ -171,9 +199,10 @@
     panel.innerHTML='<div class="tp-hero"><p class="tp-kicker">CVHL database test · '+escape(data.season?.name || 'League')+'</p><h2>'+escape(heading)+'</h2>'+
       '<p class="tp-muted">'+(p ? (data.status==='training_camp' ? 'Training Camp (TC) with '+escape(team?.name || 'your team')+'. Your TC placement comes from the test database.' : 'Your roster and game totals below come from the test database.') : escape(note))+'</p>'+
       '<div class="tp-actions"><button class="tp-button secondary" type="button" data-profile-refresh>Refresh</button><button class="tp-button secondary" type="button" data-profile-logout>Sign out</button></div></div>'+
-      (hasManagement?'<div class="tp-profile-tabs" role="tablist" aria-label="Profile sections">'+
+      (hasManagement||hasDraftPlayers?'<div class="tp-profile-tabs" role="tablist" aria-label="Profile sections">'+
         '<button type="button" role="tab" data-profile-tab="player" aria-selected="'+(activeProfileTab==='player')+'">My Profile</button>'+
-        '<button type="button" role="tab" data-profile-tab="management" aria-selected="'+(activeProfileTab==='management')+'">Team Management</button></div>':'')+
+        (hasManagement?'<button type="button" role="tab" data-profile-tab="management" aria-selected="'+(activeProfileTab==='management')+'">Team Management</button>':'')+
+        (hasDraftPlayers?'<button type="button" role="tab" data-profile-tab="draft" aria-selected="'+(activeProfileTab==='draft')+'">Draft Eligible Players</button>':'')+'</div>':'')+
       '<div data-profile-panel="player"'+(activeProfileTab==='player'?'':' hidden')+'>'+
       (p ? '<div class="tp-grid"><section class="tp-card"><h3>'+(data.status==='training_camp'?'Training Camp (TC)':'Roster')+'</h3><dl><div><dt>Team</dt><dd>'+escape(team?.name || 'Unassigned')+'</dd></div><div><dt>Position</dt><dd>'+escape(p.position || 'Not listed')+'</dd></div><div><dt>Salary</dt><dd>'+escape(p.salary == null ? 'Not listed' : '$'+Number(p.salary).toLocaleString('en-US'))+'</dd></div><div><dt>Account</dt><dd>'+escape(data.account_name)+'</dd></div></dl></section>'+
       '<section class="tp-card"><h3>Regular season</h3><div class="tp-stat-grid">'+metrics.map(([label,value])=>'<div class="tp-stat"><strong>'+escape(value ?? '—')+'</strong><span>'+escape(label)+'</span></div>').join('')+'</div></section>'+
@@ -187,7 +216,8 @@
       '<section class="tp-card"><h3>Recent team results</h3>'+results(data)+'</section>'+
       '<section class="tp-card"><h3>Test profile</h3><p class="tp-muted">This page reads the separate database league. Your live CVHL profile and availability settings remain as they are.</p></section></div>' :
       '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>')+
-      '</div>'+(hasManagement?'<div data-profile-panel="management"'+(activeProfileTab==='management'?'':' hidden')+'>'+management(data)+'</div>':'');
+      '</div>'+(hasManagement?'<div data-profile-panel="management"'+(activeProfileTab==='management'?'':' hidden')+'>'+management(data)+'</div>':'')+
+      (hasDraftPlayers?'<div data-profile-panel="draft"'+(activeProfileTab==='draft'?'':' hidden')+'>'+draftPlayers(data.draft_players)+'</div>':'');
   }
   async function load() {
     if (!pageActive() || loading) return;
@@ -232,7 +262,9 @@
     catch(error) { message.textContent=error.message || 'Could not save.'; }
     finally { button.disabled=false; }
   });
+  panel.addEventListener('input',event=>{if(event.target.closest('[data-draft-filter]'))filterDraftPlayers();});
   panel.addEventListener('change',async event=>{
+    if(event.target.closest('[data-draft-filter]')){filterDraftPlayers();return;}
     const managerSelect=event.target.closest('[data-management-team]');
     if(managerSelect){
       managerTeamId=managerSelect.value;

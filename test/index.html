@@ -2028,6 +2028,15 @@
   .tp-card button:disabled,.tp-card select:disabled{opacity:.6;cursor:wait}
   .tp-response{min-width:145px}
   @media(max-width:700px){.tp-hero{padding:20px}.tp-grid{grid-template-columns:1fr}.tp-stat-grid{grid-template-columns:repeat(2,1fr)}.tp-games li{display:block}}
+
+  .tp-draft-filters{display:flex;flex-wrap:wrap;gap:18px;margin:20px 0}
+  .tp-draft-filters label{display:grid;gap:8px;min-width:160px}
+  .tp-draft-scroll{overflow-x:auto;margin-top:18px}
+  .tp-draft-table{width:100%;min-width:800px;table-layout:fixed;border-collapse:collapse}
+  .tp-draft-table th,.tp-draft-table td{padding:18px 22px!important;text-align:left!important;white-space:normal;overflow-wrap:anywhere;line-height:1.5;border-bottom:1px solid #d5deea}
+  .tp-draft-table th:first-child,.tp-draft-table td:first-child{width:22%;min-width:0;max-width:none}
+  .tp-draft-table th:nth-child(2){width:25%}.tp-draft-table th:nth-child(3),.tp-draft-table th:nth-child(4){width:15%}
+  .tp-draft-table th{cursor:default}.tp-draft-table [hidden]{display:none!important}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../mobile-app.css?v=2">
@@ -2041,7 +2050,6 @@
   <div class="logo"><img class="league-logo" src="../CVHL/images/NHL%20Logo.png" alt="">CVHL <span>HOCKEY</span></div>
   <nav id="main-nav" aria-label="CVHL database test navigation">
     <a class="test-signup-link" href="https://admin.chelleagues.com/database-test/signup">Player Signup</a>
-    <a class="test-signup-link" href="https://admin.chelleagues.com/admin/database-leagues/cvhl-db-test/registration/eligible">Draft Eligible Players</a>
     <button class="active" type="button" data-page="home">Home</button>
     <button type="button" data-page="standings">Standings</button>
     <button type="button" data-page="players">Player Stats</button>
@@ -2425,6 +2433,6 @@
   retryFeed();
 })();
 </script>
-<script defer src="profile.js?v=11"></script>
+<script defer src="profile.js?v=12"></script>
 </body>
 </html>
