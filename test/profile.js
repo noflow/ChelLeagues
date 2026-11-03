@@ -154,18 +154,128 @@
       '<div data-management-content>'+managerControls(data,selected)+'</div></div></section>';
   }
 
+  let shortlistTeam='';
+  let shortlistBusy=false;
+  let shortlistTimer=null;
+  let shortlistGeneration=0;
   const draftDays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   function draftPlayers(list) {
+    const shared=list.shortlist;
+    const canScout=Boolean(shared?.available && shared?.teams?.length);
+    if(canScout)shortlistTeam=String(shared.team_id);
     return '<section class="tp-card"><h3>Draft Eligible Players</h3><p class="tp-muted">Approved players available for the draft.</p>'+
+      (canScout?'<div class="tp-shortlist-toolbar"><label>Team shortlist<select data-shortlist-team aria-label="Team shortlist">'+shared.teams.map(t=>'<option value="'+escape(t.id)+'"'+(String(t.id)===shortlistTeam?' selected':'')+'>'+escape(t.name)+'</option>').join('')+'</select></label><p class="tp-muted">Private to your team’s managers. Changes sync every 15 seconds.</p></div><p class="tp-muted" data-shortlist-status role="status">Team shortlist ready.</p>':'')+
       '<div class="tp-draft-filters"><label>Search<input type="search" data-draft-filter="search" placeholder="Player or gaming ID"></label>'+
       '<label>Position<select data-draft-filter="position"><option value="">Any position</option>'+['LW','C','RW','LD','RD','G'].map(p=>'<option>'+p+'</option>').join('')+'</select></label>'+
       '<label>Available day<select data-draft-filter="day"><option value="">Any day</option>'+list.game_days.map(day=>'<option value="'+day+'">'+draftDays[day]+'</option>').join('')+'</select></label></div>'+
       '<p class="tp-muted" data-draft-count role="status">'+list.players.length+' players shown</p>'+
-      '<div class="tp-draft-scroll"><table class="tp-draft-table"><thead><tr>'+['Player','PSN / Xbox ID','Primary position','Secondary position','Availability'].map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+
+      '<div class="tp-draft-scroll"><table class="tp-draft-table"><thead><tr>'+['Player','PSN / Xbox ID','Primary position','Secondary position','Availability',...(canScout?['Team shortlist']:[])].map(h=>'<th scope="col">'+h+'</th>').join('')+'</tr></thead><tbody>'+
       list.players.map(p=>'<tr data-draft-player="'+escape(p.id)+'"><td><strong>'+escape(p.name)+'</strong></td><td>'+escape(p.gaming_id?((p.console==='psn'?'PSN: ':p.console==='xbox'?'Xbox: ':'')+p.gaming_id):'Not linked yet')+'</td><td>'+escape(p.primary)+'</td><td>'+escape(p.secondary || '—')+'</td><td>'+
-        escape(list.game_days.length===p.days.length&&list.game_days.every(d=>p.days.includes(d))?'All game days':p.days.map(d=>draftDays[d]).join(', '))+'</td></tr>').join('')+
+        escape(list.game_days.length===p.days.length&&list.game_days.every(d=>p.days.includes(d))?'All game days':p.days.map(d=>draftDays[d]).join(', '))+'</td>'+(canScout?shortlistCell(p):'')+'</tr>').join('')+
       '</tbody></table></div><p class="tp-muted" data-draft-empty'+(list.players.length?' hidden':'')+'>No draft eligible players match.</p></section>';
   }
+
+  const priorityLabels={0:'Not highlighted',1:'Top Pick',2:'Interested',3:'Backup'};
+  function shortlistCell(player) {
+    return '<td class="tp-shortlist-cell"><label class="tp-shortlist-check"><input type="checkbox" data-shortlist-highlight aria-label="Highlight '+escape(player.name)+'"> Highlight</label>'+
+      '<label>Priority<select data-shortlist-priority aria-label="Draft priority for '+escape(player.name)+'">'+Object.entries(priorityLabels).map(([key,label])=>'<option value="'+key+'">'+label+'</option>').join('')+'</select></label>'+
+      '<small data-shortlist-actor></small><details><summary>Shared team notes</summary>'+
+      '<textarea data-shortlist-note maxlength="2000" rows="3" aria-label="Team notes for '+escape(player.name)+'"></textarea>'+
+      '<button class="tp-button secondary" type="button" data-shortlist-save>Save notes</button>'+
+      '<button class="tp-button secondary" type="button" data-shortlist-reload hidden>Reload changes</button></details>'+
+      '<p class="tp-muted" data-shortlist-row-status role="status"></p></td>';
+  }
+  function paintShortlist() {
+    const entries=currentProfile?.draft_players?.shortlist?.entries || [];
+    panel.querySelectorAll('[data-draft-player]').forEach(row=>{
+      const cell=row.querySelector('.tp-shortlist-cell');
+      if(!cell || row.dataset.shortlistDirty==='1' || row.dataset.shortlistSaving==='1')return;
+      const entry=entries.find(e=>String(e.player_id)===row.dataset.draftPlayer) || {};
+      const priority=Number(entry.priority || 0);
+      row.dataset.revision=String(entry.revision || 0);
+      row.classList.toggle('is-shortlisted',priority>0);
+      cell.querySelector('[data-shortlist-highlight]').checked=priority>0;
+      cell.querySelector('[data-shortlist-priority]').value=String(priority>3?2:priority);
+      cell.querySelector('[data-shortlist-note]').value=entry.note || '';
+      cell.querySelector('[data-shortlist-actor]').textContent=(priority?'Highlighted by '+(entry.highlighted_by || 'Team manager')+'. ':'')+
+        (entry.updated_by?'Updated by '+entry.updated_by+(entry.updated_at?' · '+niceTime(entry.updated_at):''):'');
+      cell.querySelector('[data-shortlist-reload]').hidden=true;
+    });
+  }
+  async function refreshShortlist(force=false) {
+    if(shortlistBusy || !pageActive() || (!force && (activeProfileTab!=='draft' || document.hidden)))return;
+    const token=localStorage.getItem(key);
+    if(!token || !currentProfile?.draft_players?.shortlist?.teams?.length)return;
+    const generation=shortlistGeneration, team=shortlistTeam;
+    shortlistBusy=true;
+    try {
+      const response=await fetch(service+'/api/website/'+league+'/test-profile/shortlist?team='+encodeURIComponent(team),{
+        headers:{Authorization:'Bearer '+token},credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(12000)});
+      const data=await response.json();
+      if(generation!==shortlistGeneration)return;
+      if(!response.ok)throw new Error(data.error || 'Could not sync team shortlist.');
+      if(!data.enabled){await load();return;}
+      currentProfile.draft_players.shortlist=data.shortlist;
+      const target=panel.querySelector('[data-profile-panel="draft"]');
+      if(!data.shortlist?.teams?.length || String(data.shortlist.team_id)!==team){
+        currentProfile.draft_players=data;
+        if(target)target.innerHTML=draftPlayers(data);
+      } else {
+        const oldIds=currentProfile.draft_players.players.map(p=>p.id).join(',');
+        const newIds=data.players.map(p=>p.id).join(',');
+        if(oldIds!==newIds && !panel.querySelector('[data-shortlist-dirty="1"]')){
+          const filters={};
+          panel.querySelectorAll('[data-draft-filter]').forEach(input=>filters[input.dataset.draftFilter]=input.value);
+          currentProfile.draft_players=data;
+          if(target)target.innerHTML=draftPlayers(data);
+          panel.querySelectorAll('[data-draft-filter]').forEach(input=>input.value=filters[input.dataset.draftFilter] || '');
+          filterDraftPlayers();
+        }
+      }
+      paintShortlist();
+      const message=panel.querySelector('[data-shortlist-status]');
+      if(message)message.textContent='Team shortlist synced. '+(panel.querySelector('[data-shortlist-dirty="1"]')?'Your unsaved notes are kept.':'');
+    } catch(error) {
+      const message=panel.querySelector('[data-shortlist-status]');
+      if(message)message.textContent=error.message || 'Sync failed. Retrying automatically.';
+    } finally { shortlistBusy=false; }
+  }
+  async function saveShortlist(row) {
+    if(shortlistBusy){row.querySelector('[data-shortlist-row-status]').textContent='Sync in progress. Please retry in a moment.';return;}
+    const message=row.querySelector('[data-shortlist-row-status]');
+    const generation=shortlistGeneration;
+    shortlistBusy=true;
+    row.dataset.shortlistSaving='1';
+    row.querySelectorAll('input,select,textarea,button').forEach(input=>input.disabled=true);
+    message.textContent='Saving for your team…';
+    try {
+      const response=await fetch(service+'/api/website/'+league+'/test-profile/shortlist',{
+        method:'POST',headers:{Authorization:'Bearer '+localStorage.getItem(key)},credentials:'omit',cache:'no-store',
+        signal:AbortSignal.timeout(12000),
+        body:new URLSearchParams({team_id:shortlistTeam,player_id:row.dataset.draftPlayer,
+          priority:row.querySelector('[data-shortlist-priority]').value,
+          note:row.querySelector('[data-shortlist-note]').value,revision:row.dataset.revision || '0'})});
+      const data=await response.json();
+      if(generation!==shortlistGeneration)return;
+      if(!response.ok){
+        if(response.status===409)row.querySelector('[data-shortlist-reload]').hidden=false;
+        throw new Error(data.error || 'Could not save team shortlist.');
+      }
+      currentProfile.draft_players.shortlist=data.shortlist;
+      delete row.dataset.shortlistDirty;
+      message.textContent='Saved for all team managers.';
+    } catch(error) {
+      row.querySelector('[data-shortlist-reload]').hidden=false;
+      message.textContent=error.message || 'Save failed. Your edits are kept; reload changes before retrying.';
+    }
+    finally {
+      delete row.dataset.shortlistSaving;
+      row.querySelectorAll('input,select,textarea,button').forEach(input=>input.disabled=false);
+      shortlistBusy=false;
+      if(row.dataset.shortlistDirty!=='1')paintShortlist();
+    }
+  }
+
   function filterDraftPlayers() {
     const value=kind=>panel.querySelector('[data-draft-filter="'+kind+'"]')?.value || '';
     const search=value('search').trim().toLowerCase(), position=value('position'), day=value('day');
@@ -182,6 +292,9 @@
 
   function render(data) {
     currentProfile=data;
+    shortlistGeneration++;
+    if(shortlistTimer)clearInterval(shortlistTimer);
+    shortlistTimer=null;
     const p=data.player, team=data.team, stats=data.stats || []; const prefs=data.preferences || {};
     const weeks=data.schedule_weeks || [];
     const week=selectedWeek(data);
@@ -218,6 +331,9 @@
       '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>')+
       '</div>'+(hasManagement?'<div data-profile-panel="management"'+(activeProfileTab==='management'?'':' hidden')+'>'+management(data)+'</div>':'')+
       (hasDraftPlayers?'<div data-profile-panel="draft"'+(activeProfileTab==='draft'?'':' hidden')+'>'+draftPlayers(data.draft_players)+'</div>':'');
+    paintShortlist();
+    if(data.draft_players?.enabled && data.draft_players?.shortlist?.teams?.length)
+      shortlistTimer=setInterval(()=>refreshShortlist(),15000);
   }
   async function load() {
     if (!pageActive() || loading) return;
@@ -262,8 +378,30 @@
     catch(error) { message.textContent=error.message || 'Could not save.'; }
     finally { button.disabled=false; }
   });
-  panel.addEventListener('input',event=>{if(event.target.closest('[data-draft-filter]'))filterDraftPlayers();});
+  panel.addEventListener('input',event=>{
+    if(event.target.closest('[data-draft-filter]'))filterDraftPlayers();
+    if(event.target.closest('[data-shortlist-note]'))event.target.closest('[data-draft-player]').dataset.shortlistDirty='1';
+  });
   panel.addEventListener('change',async event=>{
+    const teamSelect=event.target.closest('[data-shortlist-team]');
+    if(teamSelect){
+      if(shortlistBusy || panel.querySelector('[data-shortlist-dirty="1"]')){
+        teamSelect.value=shortlistTeam;
+        panel.querySelector('[data-shortlist-status]').textContent='Save your notes before switching teams.';
+        return;
+      }
+      shortlistTeam=teamSelect.value;
+      await refreshShortlist(true);
+      return;
+    }
+    const scoutControl=event.target.closest('[data-shortlist-highlight],[data-shortlist-priority]');
+    if(scoutControl){
+      const row=scoutControl.closest('[data-draft-player]');
+      row.dataset.shortlistDirty='1';
+      const priority=row.querySelector('[data-shortlist-priority]');
+      if(scoutControl.matches('[data-shortlist-highlight]'))priority.value=scoutControl.checked?(Number(priority.value)>0?priority.value:'2'):'0';
+      await saveShortlist(row);return;
+    }
     if(event.target.closest('[data-draft-filter]')){filterDraftPlayers();return;}
     const managerSelect=event.target.closest('[data-management-team]');
     if(managerSelect){
@@ -306,6 +444,14 @@
     } finally { select.disabled=false; }
   });
   panel.addEventListener('click',async event=>{
+    const shortlistSave=event.target.closest('[data-shortlist-save]');
+    if(shortlistSave){await saveShortlist(shortlistSave.closest('[data-draft-player]'));return;}
+    const shortlistReload=event.target.closest('[data-shortlist-reload]');
+    if(shortlistReload){
+      const row=shortlistReload.closest('[data-draft-player]');
+      delete row.dataset.shortlistDirty;
+      await refreshShortlist(true);return;
+    }
     const profileTab=event.target.closest('[data-profile-tab]');
     if(profileTab){
       activeProfileTab=profileTab.dataset.profileTab;
@@ -313,6 +459,7 @@
         button.setAttribute('aria-selected',String(button.dataset.profileTab===activeProfileTab)));
       panel.querySelectorAll('[data-profile-panel]').forEach(section=>
         section.hidden=section.dataset.profilePanel!==activeProfileTab);
+      if(activeProfileTab==='draft')await refreshShortlist(true);
       return;
     }
     const managerToggle=event.target.closest('[data-management-toggle]');
@@ -340,6 +487,8 @@
       if(token)await fetch(service+'/api/website/'+league+'/action/logout',{
         method:'POST',headers:{Authorization:'Bearer '+token},credentials:'omit',cache:'no-store'
       }).catch(()=>{});
+      if(shortlistTimer)clearInterval(shortlistTimer);
+      shortlistGeneration++;
       localStorage.removeItem(key);signedOut();
     }
   });
