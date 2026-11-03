@@ -11,7 +11,7 @@
   const isReview=()=>active==='trade-reviews';
   const teamName=id=>data?.teams.find(t=>t.id===Number(id))?.name || 'Team';
   function choices(id,side){
-    if(!id)return '<p class="tp-muted">Choose the other team to see its players.</p>';
+    if(!id)return '<fieldset class="tp-trade-assets"><legend>Other team sends</legend><p class="tp-muted">Choose the other team to see its players.</p></fieldset>';
     return '<fieldset class="tp-trade-assets"><legend>'+esc(teamName(id))+' sends</legend>'+
       (data.players.filter(p=>p.team_id===Number(id)).map(p=>'<label class="tp-trade-choice"><input type="checkbox" name="players_'+side+'" value="'+p.id+'"><span><strong>'+esc(p.name)+'</strong><small>'+esc(p.section)+' · '+esc(money(p.salary))+'</small></span></label>').join('') || '<p class="tp-muted">No tradable players on this team.</p>')+'</fieldset>';
   }
@@ -42,7 +42,7 @@
       (!reviews?'<label class="tp-trade-team-label">Your team<select data-test-trade-team>'+data.managed_teams.map(t=>'<option value="'+t.id+'"'+(t.id===data.team_id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select></label>':'')+
       '<button class="tp-button secondary" type="button" data-test-trade-refresh>Refresh status</button><p class="tp-muted" data-test-trade-message role="status">Offers update every 15 seconds.</p></section>'+
       (!reviews?'<section class="tp-card"><h3>Propose a trade</h3><p class="tp-muted">Player and training-camp trades. Future-pick trading is not enabled in the test league.</p><form data-test-trade-action data-trade-composer>'+hidden('trade_action','propose')+hidden('season_id',data.season.id)+hidden('team_id',data.team_id)+
-        '<div class="tp-trade-columns"><section>'+choices(data.team_id,'a')+'</section><section><label>Trade with<select name="receiving_team" data-test-trade-receiver required><option value="">Choose a team</option>'+data.teams.filter(t=>t.id!==data.team_id).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></label><div data-test-trade-receiver-choices>'+choices('','b')+'</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="tp-muted">Select at least one player from each team. Players keep their salary and roster/TC section. Protected staff cannot be traded.</p><button class="tp-button" type="submit">Send trade offer</button></form></section>':'')+
+        '<label class="tp-trade-partner">Trade with<select name="receiving_team" data-test-trade-receiver required><option value="">Choose a team</option>'+data.teams.filter(t=>t.id!==data.team_id).map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></label><div class="tp-trade-columns tp-trade-composer-columns"><section>'+choices(data.team_id,'a')+'</section><section><div data-test-trade-receiver-choices>'+choices('','b')+'</div></section></div><label>Offer note<textarea name="note" maxlength="1000" rows="2"></textarea></label><p class="tp-muted">Select at least one player from each team. Players keep their salary and roster/TC section. Protected staff cannot be traded.</p><button class="tp-button" type="submit">Send trade offer</button></form></section>':'')+
       '<div data-test-trade-history>'+history()+'</div>';
   }
   const rosterSignature=value=>JSON.stringify([value.players,value.rules]);
