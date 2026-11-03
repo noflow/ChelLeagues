@@ -27,4 +27,11 @@ test('draft tab works without management and disappears when disabled',()=>{
   data.draft_players={enabled:false,players:[],game_days:[]};
   context.window.testRender(data);
   assert.doesNotMatch(panel.innerHTML,/data-profile-tab="draft"|data-draft-player/);
+  data.trade_access={enabled:true,can_review:false};
+  context.window.testRender(data);
+  assert.match(panel.innerHTML,/data-profile-tab="trades"/);
+  assert.doesNotMatch(panel.innerHTML,/data-profile-tab="trade-reviews"/);
+  data.trade_access.can_review=true;
+  context.window.testRender(data);
+  assert.match(panel.innerHTML,/data-profile-tab="trade-reviews"/);
 });

@@ -44,6 +44,7 @@
     localStorage.setItem(key,data.token);
   }
   function signedOut(message='') {
+    window.ChelTestTrades?.destroy();
     panel.innerHTML = '<div class="tp-hero"><p class="tp-kicker">Database test league</p><h2>Your player area</h2><p class="tp-muted">Sign in with Discord to see your verified player, test roster, stats, and upcoming games.</p>'+
       (message ? '<p class="tp-muted" role="alert">'+escape(message)+'</p>' : '')+
       '<div class="tp-actions"><button class="tp-button" type="button" data-profile-login>Sign in with Discord</button></div></div>';
@@ -314,7 +315,8 @@
     const heading=p ? p.name : data.account_name;
     const hasManagement=Boolean(data.management?.teams?.length);
     const hasDraftPlayers=Boolean(data.draft_players?.enabled);
-    if((activeProfileTab==='management'&&!hasManagement)||(activeProfileTab==='draft'&&!hasDraftPlayers))activeProfileTab='player';
+    const hasTrades=Boolean(data.trade_access?.enabled), hasTradeReviews=Boolean(data.trade_access?.can_review);
+    if((activeProfileTab==='management'&&!hasManagement)||(activeProfileTab==='draft'&&!hasDraftPlayers)||(activeProfileTab==='trades'&&!hasTrades)||(activeProfileTab==='trade-reviews'&&!hasTradeReviews))activeProfileTab='player';
     let note='';
     if(data.status==='unlinked') note='Your Discord account has no verified CVHL player claim yet.';
     if(data.status==='missing') note='Your verified CVHL player, '+data.linked_name+', is not on the current test roster yet.';
@@ -325,9 +327,11 @@
     panel.innerHTML='<div class="tp-hero"><p class="tp-kicker">CVHL database test · '+escape(data.season?.name || 'League')+'</p><h2>'+escape(heading)+'</h2>'+
       '<p class="tp-muted">'+(p ? (data.status==='training_camp' ? 'Training Camp (TC) with '+escape(team?.name || 'your team')+'. Your TC placement comes from the test database.' : 'Your roster and game totals below come from the test database.') : escape(note))+'</p>'+
       '<div class="tp-actions"><button class="tp-button secondary" type="button" data-profile-refresh>Refresh</button><a class="tp-button secondary" href="draft.html">Team Draft Board</a><button class="tp-button secondary" type="button" data-profile-logout>Sign out</button></div></div>'+
-      (hasManagement||hasDraftPlayers?'<div class="tp-profile-tabs" role="tablist" aria-label="Profile sections">'+
+      (hasManagement||hasDraftPlayers||hasTrades||hasTradeReviews?'<div class="tp-profile-tabs" role="tablist" aria-label="Profile sections">'+
         '<button type="button" role="tab" data-profile-tab="player" aria-selected="'+(activeProfileTab==='player')+'">My Profile</button>'+
         (hasManagement?'<button type="button" role="tab" data-profile-tab="management" aria-selected="'+(activeProfileTab==='management')+'">Team Management</button>':'')+
+        (hasTrades?'<button type="button" role="tab" data-profile-tab="trades" aria-selected="'+(activeProfileTab==='trades')+'">Trades</button>':'')+
+        (hasTradeReviews?'<button type="button" role="tab" data-profile-tab="trade-reviews" aria-selected="'+(activeProfileTab==='trade-reviews')+'">Trade Approvals</button>':'')+
         (hasDraftPlayers?'<button type="button" role="tab" data-profile-tab="draft" aria-selected="'+(activeProfileTab==='draft')+'">Draft Eligible Players</button>':'')+'</div>':'')+
       '<div data-profile-panel="player"'+(activeProfileTab==='player'?'':' hidden')+'>'+
       (p ? '<div class="tp-grid"><section class="tp-card"><h3>'+(data.status==='training_camp'?'Training Camp (TC)':'Roster')+'</h3><dl><div><dt>Team</dt><dd>'+escape(team?.name || 'Unassigned')+'</dd></div><div><dt>Position</dt><dd>'+escape(p.position || 'Not listed')+'</dd></div><div><dt>Salary</dt><dd>'+escape(p.salary == null ? 'Not listed' : '$'+Number(p.salary).toLocaleString('en-US'))+'</dd></div><div><dt>Account</dt><dd>'+escape(data.account_name)+'</dd></div></dl></section>'+
@@ -343,7 +347,10 @@
       '<section class="tp-card"><h3>Test profile</h3><p class="tp-muted">This page reads the separate database league. Your live CVHL profile and availability settings remain as they are.</p></section></div>' :
       '<div class="tp-grid"><section class="tp-card"><h3>Player connection</h3><p class="tp-muted">'+escape(note)+'</p></section></div>')+
       '</div>'+(hasManagement?'<div data-profile-panel="management"'+(activeProfileTab==='management'?'':' hidden')+'>'+management(data)+'</div>':'')+
-      (hasDraftPlayers?'<div data-profile-panel="draft"'+(activeProfileTab==='draft'?'':' hidden')+'>'+draftPlayers(data.draft_players)+'</div>':'');
+      (hasDraftPlayers?'<div data-profile-panel="draft"'+(activeProfileTab==='draft'?'':' hidden')+'>'+draftPlayers(data.draft_players)+'</div>':'')+
+      (hasTrades?'<div data-profile-panel="trades"'+(activeProfileTab==='trades'?'':' hidden')+'><div data-test-trades></div></div>':'')+
+      (hasTradeReviews?'<div data-profile-panel="trade-reviews"'+(activeProfileTab==='trade-reviews'?'':' hidden')+'><div data-test-trade-reviews></div></div>':'');
+    window.ChelTestTrades?.mount(panel,activeProfileTab);
     paintShortlist();
     if(data.draft_players?.enabled && data.draft_players?.shortlist?.teams?.length)
       shortlistTimer=setInterval(()=>refreshShortlist(),15000);
@@ -470,6 +477,7 @@
         button.setAttribute('aria-selected',String(button.dataset.profileTab===activeProfileTab)));
       panel.querySelectorAll('[data-profile-panel]').forEach(section=>
         section.hidden=section.dataset.profilePanel!==activeProfileTab);
+      window.ChelTestTrades?.show(activeProfileTab);
       if(activeProfileTab==='draft')await refreshShortlist(true);
       return;
     }
