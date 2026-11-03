@@ -243,7 +243,18 @@
     } finally { shortlistBusy=false; }
   }
   async function saveShortlist(row) {
-    if(shortlistBusy){row.querySelector('[data-shortlist-row-status]').textContent='Sync in progress. Please retry in a moment.';return;}
+    if(shortlistBusy){
+      if(row.dataset.shortlistSaving==='1')return;
+      row.querySelector('[data-shortlist-row-status]').textContent='Waiting for sync, then saving…';
+      if(!row.dataset.shortlistQueued){
+        row.dataset.shortlistQueued='1';
+        setTimeout(()=>{
+          delete row.dataset.shortlistQueued;
+          if(row.isConnected && row.dataset.shortlistDirty==='1')saveShortlist(row);
+        },300);
+      }
+      return;
+    }
     const message=row.querySelector('[data-shortlist-row-status]');
     const generation=shortlistGeneration;
     shortlistBusy=true;
