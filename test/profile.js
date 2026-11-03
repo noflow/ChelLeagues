@@ -324,7 +324,7 @@
     const metrics=statMetrics(data,regular,isGoalie);
     panel.innerHTML='<div class="tp-hero"><p class="tp-kicker">CVHL database test · '+escape(data.season?.name || 'League')+'</p><h2>'+escape(heading)+'</h2>'+
       '<p class="tp-muted">'+(p ? (data.status==='training_camp' ? 'Training Camp (TC) with '+escape(team?.name || 'your team')+'. Your TC placement comes from the test database.' : 'Your roster and game totals below come from the test database.') : escape(note))+'</p>'+
-      '<div class="tp-actions"><button class="tp-button secondary" type="button" data-profile-refresh>Refresh</button><button class="tp-button secondary" type="button" data-profile-logout>Sign out</button></div></div>'+
+      '<div class="tp-actions"><button class="tp-button secondary" type="button" data-profile-refresh>Refresh</button><a class="tp-button secondary" href="draft.html">Team Draft Board</a><button class="tp-button secondary" type="button" data-profile-logout>Sign out</button></div></div>'+
       (hasManagement||hasDraftPlayers?'<div class="tp-profile-tabs" role="tablist" aria-label="Profile sections">'+
         '<button type="button" role="tab" data-profile-tab="player" aria-selected="'+(activeProfileTab==='player')+'">My Profile</button>'+
         (hasManagement?'<button type="button" role="tab" data-profile-tab="management" aria-selected="'+(activeProfileTab==='management')+'">Team Management</button>':'')+
