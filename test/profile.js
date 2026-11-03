@@ -49,7 +49,7 @@
       '<div class="tp-actions"><button class="tp-button" type="button" data-profile-login>Sign in with Discord</button></div></div>';
   }
   let currentProfile;
-  const availabilityOptions = [['none','No response'],['available','Available'],['unavailable','Unavailable']];
+  const availabilityLabels={none:'No response',available:'Available',unavailable:'Unavailable'};
   function weekGames(data, weekNumber) {
     const games=(data.schedule_games || data.upcoming_games || []).filter(game=>Number(game.week_number)===Number(weekNumber));
     if(!games.length) return '<p class="tp-muted">No games for your team this week.</p>';
@@ -58,13 +58,12 @@
       const open=game.status==='scheduled' && new Date(game.starts_at).getTime()>Date.now();
       return '<li><span>'+escape(niceTime(game.starts_at))+'<br><strong>'+
         escape((game.home_team_id===data.player.team_id ? 'vs ' : '@ ')+game.opponent_name)+
-        '</strong></span><label class="tp-response">Availability<select data-test-game="'+escape(game.id)+
-        '" data-saved-status="'+escape(status)+'" class="availability-'+escape(status)+'"'+(open?'':' disabled')+'>'+
-        availabilityOptions.map(([value,label])=>'<option value="'+value+'"'+(status===value?' selected':'')+'>'+label+'</option>').join('')+
-        '</select><div class="tp-quick-response" role="group" aria-label="Availability for '+escape(game.opponent_name)+'">'+
+        '</strong></span><div class="tp-response" data-availability-game="'+escape(game.id)+'" data-saved-status="'+escape(status)+'"><span>Availability</span>'+
+        '<span data-response-label class="availability-'+escape(status)+'">'+escape(availabilityLabels[status])+'</span>'+
+        '<div class="tp-quick-response" role="group" aria-label="Availability for '+escape(game.opponent_name)+'">'+
         [['available','Available'],['unavailable','Unavailable']].map(([value,label])=>
-          '<button type="button" data-quick-game="'+escape(game.id)+'" data-quick-status="'+value+'" class="'+value+'" aria-pressed="'+(status===value)+'"'+(open?'':' disabled')+'>'+label+'</button>').join('')+
-        '</div></label></li>';
+          '<button type="button" data-quick-game="'+escape(game.id)+'" data-quick-status="'+value+'" class="'+value+'" title="Click again to clear your response" aria-pressed="'+(status===value)+'"'+(open?'':' disabled')+'>'+label+'</button>').join('')+
+        '</div></div></li>';
     }).join('')+'</ul>';
   }
   function selectedWeek(data) {
@@ -86,11 +85,12 @@
         escape(ours)+' – '+escape(theirs)+(game.overtime?' · OT':'')+'</strong></li>';
     }).join('')+'</ul>';
   }
-  function paintResponse(select) {
-    select.className='availability-'+select.value;
-    const row=select.closest('li');
-    row?.querySelectorAll('[data-quick-status]').forEach(button=>{
-      button.setAttribute('aria-pressed',String(button.dataset.quickStatus===select.value));
+  function paintResponse(row,status) {
+    const label=row.querySelector('[data-response-label]');
+    label.className='availability-'+status;
+    label.textContent=availabilityLabels[status];
+    row.querySelectorAll('[data-quick-status]').forEach(button=>{
+      button.setAttribute('aria-pressed',String(button.dataset.quickStatus===status));
     });
   }
   function statMetrics(data, regular, isGoalie) {
@@ -452,22 +452,7 @@
       panel.querySelector('[data-availability-message]').textContent='';
       return;
     }
-    const select=event.target.closest('[data-test-game]');
-    if (!select) return;
-    const message=panel.querySelector('[data-availability-message]');
-    const choice=select.value, previous=select.dataset.savedStatus || 'none';
-    select.disabled=true;
-    message.textContent='Saving availability…';
-    try {
-      await save('availability',{game_id:select.dataset.testGame,status:choice},message);
-      currentProfile.availability[select.dataset.testGame]=choice;
-      select.dataset.savedStatus=choice;
-      paintResponse(select);
-    } catch(error) {
-      select.value=previous;
-      paintResponse(select);
-      message.textContent=error.message || 'Could not save.';
-    } finally { select.disabled=false; }
+
   });
   panel.addEventListener('click',async event=>{
     const shortlistSave=event.target.closest('[data-shortlist-save]');
@@ -498,14 +483,26 @@
     }
     const quick=event.target.closest('[data-quick-game]');
     if(quick){
-      const select=panel.querySelector('[data-test-game="'+quick.dataset.quickGame+'"]');
-      if(select && !select.disabled){
-        select.value=quick.dataset.quickStatus;
-        paintResponse(select);
-        select.dispatchEvent(new Event('change',{bubbles:true}));
-      }
+      if(quick.disabled)return;
+      const row=quick.closest('[data-availability-game]');
+      const previous=row.dataset.savedStatus || 'none';
+      const choice=previous===quick.dataset.quickStatus?'none':quick.dataset.quickStatus;
+      const message=panel.querySelector('[data-availability-message]');
+      const buttons=row.querySelectorAll('[data-quick-status]');
+      buttons.forEach(button=>button.disabled=true);
+      paintResponse(row,choice);
+      message.textContent='Saving availability…';
+      try {
+        await save('availability',{game_id:row.dataset.availabilityGame,status:choice},message);
+        currentProfile.availability[row.dataset.availabilityGame]=choice;
+        row.dataset.savedStatus=choice;
+      } catch(error) {
+        paintResponse(row,previous);
+        message.textContent=error.message || 'Could not save.';
+      } finally { buttons.forEach(button=>button.disabled=false); }
       return;
     }
+
     if(event.target.closest('[data-profile-login]'))await login();
     if(event.target.closest('[data-profile-refresh]'))await load();
     if(event.target.closest('[data-profile-logout]')){
