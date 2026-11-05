@@ -2063,6 +2063,38 @@
 <script defer src="../app.js"></script>
 <link rel="stylesheet" href="https://admin.chelleagues.com/static/website-design.css?v=2">
 <script src="https://admin.chelleagues.com/static/website-design.js?v=2"></script>
+<style>
+  #player-modal .stat-box { background: #101f31; border-color: #36516e; }
+  #player-modal .stat-box .stat-val { color: #f5f9ff; }
+  #player-modal .stat-box .stat-lbl { color: #c1d5ed; }
+  #game-info-modal .modal-card { background: #10253c; color: #fff; border: 1px solid #249ce9; }
+  #game-info-modal .modal-body { background: #10253c; color: #fff; --gold: #7bcaff; }
+  #game-info-body .score-matchup-note { color: #dbe5ee; margin: 0 0 16px; }
+  #game-info-body .score-matchup-table caption { text-align: left; font-weight: 700; padding-bottom: 8px; }
+  #game-info-body .test-player-link { color: #bde4ff; }
+.score-matchup-teams { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 12px; }
+.score-matchup-team { background: #0003; border: 1px solid #ffffff12; border-radius: 14px; padding: 18px 10px; text-align: center; min-width: 0; }
+.score-matchup-logo { display: block; margin: 0 auto 10px; width: 90px; height: 90px; object-fit: contain; }
+.score-matchup-name { font: 700 22px 'Manrope', sans-serif; }
+.score-matchup-score { font: 900 38px 'Manrope', sans-serif; margin: 6px 0; }
+.score-matchup-versus { font: 700 16px 'Manrope', sans-serif; }
+.score-matchup-section { border-top: 1px solid #ffffff20; padding-top: 16px; margin-top: 16px; }
+.score-matchup-team-tabs { display: flex; gap: 8px; margin-top: 16px; }
+.score-matchup-team-tabs button { flex: 1; min-width: 0; padding: 10px; border: 1px solid #ffffff40; border-radius: 6px; background: #0003; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.score-matchup-team-tabs button[aria-selected="true"] { background: #ffffff18; border-color: var(--gold); box-shadow: inset 0 -3px var(--gold); }
+.score-matchup-team-tabs button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.score-matchup-table { max-width: 100%; overflow: auto; margin-top: 12px; }
+.score-matchup-table table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.score-matchup-table tbody tr { background: transparent; }
+.score-matchup-table tbody tr:nth-child(even) { background: #ffffff0a; }
+.score-matchup-table tbody tr:hover { background: #ffffff18 !important; }
+.score-matchup-table th, .score-matchup-table td { padding: 7px; border-bottom: 1px solid #ffffff20; text-align: left; color: #fff; background: transparent; white-space: nowrap; }
+@media (max-width: 480px) {
+  .score-matchup-logo { width: 62px; height: 62px; }
+  .score-matchup-name { font-size: 18px; }
+  .score-matchup-teams { gap: 6px; }
+}
+</style>
 <script src="database-sync.js?v=1"></script>
 </head>
 <body>
@@ -2157,7 +2189,7 @@
   document.addEventListener('click',e=>{const button=e.target.closest('[data-player-index]');if(button)openPlayer(Number(button.dataset.playerIndex));});
   $('modal-close').addEventListener('click',closePlayer);
   $('player-modal').addEventListener('click',e=>{if(e.target===$('player-modal'))closePlayer()});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('player-modal').classList.contains('open'))closePlayer()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('player-modal').classList.contains('open')){e.preventDefault();closePlayer()}});
   function logo(t, cls='test-logo') {
     if(t.logo_url && /^https:\/\//i.test(t.logo_url))return '<img class="'+cls+'" src="'+safe(t.logo_url)+'" alt="" loading="lazy">';
     const file = logos[t.abbr];
@@ -2358,27 +2390,84 @@
     }).join('')+'</div>';
     bar.hidden=false;
   }
-  function openGame(id) {
-    const g=data.games.find(item=>String(item.id)===String(id));if(!g)return;
-    const away=team(g.away_team_id),home=team(g.home_team_id);
-    $('game-info-title').textContent=away.name+' vs '+home.name;
-    const rows=(data.game_player_stats||[]).filter(s=>s.game_id===g.id);
-    const boxes=rows.length?[['Skaters','skater',['Goals','Assists','Shots','Hits','Plus Minus']],['Goalies','goalie',['Saves','Shots Against','Goals Against']]].map(([title,kind,columns])=>{
+  const boxScoreColumns = [
+    ['Skaters', 'skater', [['Position','POS'],['Goals','G'],['Assists','A'],['Points','PTS'],['Shots','SOG'],['Hits','HIT'],['Plus Minus','+/−']]],
+    ['Goalies', 'goalie', [['Shots Against','SA'],['Saves','SV'],['Goals Against','GA'],['Save %','SV%']]]
+  ];
+  let gameOpener;
+  function teamBoxScore(rows) {
+    return boxScoreColumns.map(([title,kind,columns])=>{
       const subset=rows.filter(s=>s.kind===kind);
-      if(!subset.length)return '';
-      return '<h3>'+title+'</h3><div class="test-table-scroll"><table class="stat-table"><thead><tr><th>PLAYER</th><th>TEAM</th>'+columns.map(col=>'<th>'+safe(col)+'</th>').join('')+'</tr></thead><tbody>'+subset.map(s=>{
-        const player=data.players.find(p=>p.id===s.player_id),values=s.stats||{};
-        return '<tr><td>'+(player?playerLink(player):safe(values.Username||'Player'))+'</td><td>'+safe(team(s.team_id).abbr)+'</td>'+columns.map(col=>'<td>'+safe(values[col]??'–')+'</td>').join('')+'</tr>';
-      }).join('')+'</tbody></table></div>';
-    }).join(''):'<p>No player box score recorded for this game yet.</p>';
-    $('game-info-body').innerHTML='<p><strong>'+safe(date(g.starts_at))+' · '+safe(time(g.starts_at))+' ET</strong></p><p>'+safe(g.status==='final'?'Final score: '+g.away_score+'–'+g.home_score:'Scheduled game')+' · '+safe(g.phase)+'</p>'+boxes;
-    $('game-info-modal').classList.add('open');$('game-info-modal').setAttribute('aria-hidden','false');$('game-info-close').focus();
+      if(!subset.length)return '<p class="score-matchup-note">No '+kind+' stats recorded.</p>';
+      const visible=columns.filter(([key])=>subset.some(s=>Object.hasOwn(s.stats||{},key)));
+      return '<div class="score-matchup-table"><table><caption>'+title+'</caption><thead><tr><th scope="col">Player</th>'+
+        visible.map(([key,label])=>'<th scope="col" title="'+safe(key)+'">'+safe(label)+'</th>').join('')+
+        '</tr></thead><tbody>'+subset.map(s=>{
+          const player=data.players.find(p=>p.id===s.player_id),values=s.stats||{};
+          return '<tr><td>'+(player?playerLink(player):safe(values.Username||'Player'))+'</td>'+
+            visible.map(([key])=>'<td>'+safe(values[key]??'–')+'</td>').join('')+'</tr>';
+        }).join('')+'</tbody></table></div>';
+    }).join('');
   }
-  document.addEventListener('click',e=>{const game=e.target.closest('[data-game-id]');if(game)openGame(game.dataset.gameId)});
-  document.addEventListener('keydown',e=>{const game=e.target.closest('[data-game-id]');if(game&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openGame(game.dataset.gameId)}});
-  $('game-info-close').addEventListener('click',()=>{ $('game-info-modal').classList.remove('open');$('game-info-modal').setAttribute('aria-hidden','true'); });
+  function openGame(id, opener) {
+    const g=data.games.find(item=>String(item.id)===String(id));
+    if(!g)return;
+    gameOpener=opener;
+    const sides=[[team(g.away_team_id),g.away_score,'Away'],[team(g.home_team_id),g.home_score,'Home']];
+    const final=g.status==='final';
+    $('game-info-title').textContent=final?'Game Matchup · Final'+(g.overtime?' / OT':''):'Game Matchup · Scheduled';
+    const rows=final?(data.game_player_stats||[]).filter(s=>s.game_id===g.id):[];
+    const teamsHtml=sides.map(([t,score,side])=>'<div class="score-matchup-team">'+logo(t,'score-matchup-logo')+
+      '<div class="score-matchup-name">'+safe(t.name)+'</div><div class="score-matchup-score">'+safe(score??'–')+
+      '</div><div>'+side+'</div></div>').join('<span class="score-matchup-versus">VS</span>');
+    const boxHtml=rows.length?'<div class="score-matchup-team-tabs" role="tablist" aria-label="Box score team">'+
+      sides.map(([t],i)=>'<button type="button" role="tab" id="test-box-tab-'+i+'" aria-controls="test-box-panel-'+i+
+        '" aria-selected="'+(i===0)+'" tabindex="'+(i===0?0:-1)+'">'+safe(t.name)+'</button>').join('')+'</div>'+
+      sides.map(([t],i)=>'<div role="tabpanel" id="test-box-panel-'+i+'" aria-labelledby="test-box-tab-'+i+
+        '" tabindex="0"'+(i?' hidden':'')+'>'+teamBoxScore(rows.filter(s=>s.team_id===t.id))+'</div>').join(''):
+      '<p class="score-matchup-note">'+(final?'No player box score recorded for this game yet.':'Box scores appear after the game is final.')+'</p>';
+    $('game-info-body').innerHTML='<p class="score-matchup-note">'+safe(date(g.starts_at))+' · '+safe(time(g.starts_at))+
+      ' ET · '+(g.phase==='regular'?'Regular season':'Playoffs')+'</p><div class="score-matchup-teams">'+teamsHtml+
+      '</div><section class="score-matchup-section"><h3>Box Score</h3>'+boxHtml+'</section>';
+    const tabs=[...$('game-info-body').querySelectorAll('[role="tab"]')];
+    function selectTeam(index) {
+      tabs.forEach((tab,i)=>{
+        tab.setAttribute('aria-selected',String(i===index));
+        tab.tabIndex=i===index?0:-1;
+        $(tab.getAttribute('aria-controls')).hidden=i!==index;
+      });
+    }
+    tabs.forEach((tab,i)=>{
+      tab.addEventListener('click',()=>selectTeam(i));
+      tab.addEventListener('keydown',event=>{
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+        event.preventDefault();
+        const index=event.key==='Home'?0:event.key==='End'?1:1-i;
+        selectTeam(index);
+        tabs[index].focus();
+      });
+    });
+    $('game-info-modal').classList.add('open');
+    $('game-info-modal').setAttribute('aria-hidden','false');
+    $('game-info-close').focus();
+  }
+  document.addEventListener('click',e=>{const game=e.target.closest('[data-game-id]');if(game)openGame(game.dataset.gameId,game)});
+  document.addEventListener('keydown',e=>{
+    const game=e.target.closest('[data-game-id]');
+    if(game&&game.tagName!=='BUTTON'&&(e.key==='Enter'||e.key===' ')){
+      e.preventDefault();
+      openGame(game.dataset.gameId,game);
+    }
+  });
+  $('game-info-close').addEventListener('click',()=>{
+    $('game-info-modal').classList.remove('open');
+    $('game-info-modal').setAttribute('aria-hidden','true');
+    gameOpener?.focus();
+  });
   $('game-info-modal').addEventListener('click',e=>{if(e.target===$('game-info-modal'))$('game-info-close').click()});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('game-info-modal').classList.contains('open'))$('game-info-close').click()});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&!e.defaultPrevented&&$('game-info-modal').classList.contains('open'))$('game-info-close').click();
+  });
   const homeCardDefinitions={
     goals:['Top Goal Scorers','skater','desc',v=>String(v)],
     assists:['Top Assists','skater','desc',v=>String(v)],
