@@ -969,31 +969,33 @@
     gap: 10px;
   }
   .stat-box {
-    background: var(--ice);
+    background: #0d1e33;
     border-radius: 8px;
     padding: 10px 12px;
     text-align: center;
-    border: 1px solid var(--grey2);
+    border: 1px solid #45627f;
   }
-  .stat-box.highlight { background: var(--teal3); border-color: var(--teal); }
+  .stat-box.highlight { background: var(--teal3); border-color: #45627f; }
   .stat-box.advanced  { background: #fef9f0; border-color: #f39c12; }
   .stat-val {
     font-family: 'Manrope', sans-serif;
     font-size: 26px;
     font-weight: 900;
-    color: var(--teal);
+    color: #f4f8ff;
     line-height: 1;
   }
-  .stat-box.highlight .stat-val { color: var(--teal); }
-  .stat-box.advanced  .stat-val { color: var(--gold); }
+  .stat-box.highlight .stat-val { color: #081426; }
+  .stat-box.advanced  .stat-val { color: #754500; }
   .stat-lbl {
     font-size: 10px;
     font-weight: 600;
-    color: var(--grey3);
+    color: #c0d1e5;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-top: 4px;
   }
+  .stat-box.highlight .stat-lbl,
+  .stat-box.advanced .stat-lbl { color: #40536b; }
   .player-name.clickable {
     cursor: pointer;
     text-decoration: underline;
@@ -1809,7 +1811,7 @@ nav button:hover { background: #154275; }
   border-left: 3px solid var(--accent);
   box-shadow: 0 0 26px #007cff22;
 }
-.home-title { color: #f4f8ff; text-shadow: 0 2px 0 #07101e, 0 0 24px #119fff44; }
+.home-title { color: var(--teal); text-shadow: 0 2px 0 #07101e, 0 0 24px #119fff44; }
 .home-metric, .leader-card, .division-block, .table-wrap, .game-card {
   box-shadow: 0 6px 22px #0005;
 }
