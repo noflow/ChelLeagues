@@ -2064,6 +2064,59 @@
 <link rel="stylesheet" href="https://admin.chelleagues.com/static/website-design.css?v=2">
 <script src="https://admin.chelleagues.com/static/website-design.js?v=2"></script>
 <style>
+
+/* Keep wide stat lines readable as the table scrolls. */
+#page-players .stat-table,
+#team-content .test-team-table {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+#page-players .stat-table th,
+#team-content .test-team-table th {
+  padding: 10px 12px;
+  color: #f5faff;
+  border-bottom: 2px solid #6585a3;
+}
+#page-players .stat-table td,
+#team-content .test-team-table td {
+  padding: 11px 12px;
+  line-height: 1.4;
+  color: #f5faff;
+  background: #112740;
+  border-bottom: 1px solid #45617d;
+}
+#page-players .stat-table tbody tr:nth-child(even) td,
+#team-content .test-team-table tbody tr:nth-child(even) td {
+  background: #233f5c;
+}
+#page-players .stat-table tbody tr:hover td,
+#page-players .stat-table tbody tr:focus-within td,
+#team-content .test-team-table tbody tr:hover td,
+#team-content .test-team-table tbody tr:focus-within td {
+  background: #305679;
+}
+#page-players .stat-table th:first-child,
+#page-players .stat-table td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  min-width: 138px;
+}
+#page-players .stat-table th:first-child,
+#team-content .test-team-table th:first-child {
+  z-index: 2;
+}
+#page-players .stat-table :is(th,td):first-child,
+#team-content .test-team-table :is(th,td):first-child {
+  box-shadow: 2px 0 #6486a6;
+}
+#page-players .stat-table .test-player-link,
+#team-content .test-team-table .test-player-link {
+  color: #e6f6ff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
   #player-modal .stat-box { background: #101f31; border-color: #36516e; }
   #player-modal .stat-box .stat-val { color: #f5f9ff; }
   #player-modal .stat-box .stat-lbl { color: #c1d5ed; }
