@@ -1844,7 +1844,8 @@ footer { color: #b5c7dc; }
 <link rel="stylesheet" href="../mobile-app.css?v=2">
 <script defer src="../app.js"></script>
 <link rel="stylesheet" href="../player-ranks.css?v=3">
-<script src="../player-ranks.js?v=3"></script>
+<script src="position-ratings.js?v=1"></script>
+<script src="badges.js?v=1"></script>
 <link rel="stylesheet" href="../watch-live.css?v=4">
 <script defer src="../watch-live.js?v=5"></script>
 </head>
@@ -3187,6 +3188,7 @@ async function loadGoalies() {
     else goalieData = targetData;
     const svIdx = targetData.cols.findIndex(h => h.trim() === "Save %");
     if (svIdx !== -1) sortState.goalies.col = svIdx;
+    try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Rating logs unavailable", e); }
     renderGoalies();
   } catch(e) {
     document.getElementById("goalie-table-wrap").innerHTML = `<div class="loading">Error: ${e.message}</div>`;
@@ -6076,12 +6078,29 @@ function calculatePlayerOverall(stats, role, playerName = "") {
   if (!stats) return null;
   return role === "goalie" ? calculateGoalieOverall(stats) : calculateSkaterOverall(stats, playerName);
 }
-function renderOverallBadge(stats, role, playerName = "", compact = false) {
+const cvhlRatingCache = new Map();
+function cvhlRatingResults(season) {
+  const cached = cvhlRatingCache.get(season);
+  if (cached && cached.skater === skaterLogData && cached.goalie === goalieLogData) return cached.results;
+  const phaseRows = log => [log.cols, ...log.rows.filter(row => {
+    const i = log.cols.indexOf(GAME_PHASE_COL);
+    return (i < 0 ? "regular" : row[i]) === season;
+  })];
+  if (!window.CVHLRatings || !skaterLogData.cols.length || !goalieLogData.cols.length) return [];
+  let results = [];
+  try { results = window.CVHLRatings.evaluate({skaterLog:phaseRows(skaterLogData), goalieLog:phaseRows(goalieLogData)}); }
+  catch (error) { console.warn("CVHL rating data needs review", error); }
+  cvhlRatingCache.set(season, {skater:skaterLogData, goalie:goalieLogData, results});
+  return results;
+}
+function renderOverallBadge(stats, role, playerName = "", compact = false, season = "regular") {
   if (!window.ChelRanks || !stats) return "";
-  return window.ChelRanks.render({
-    score: calculatePlayerOverall(stats, role, playerName),
-    gp: statGpValue(stats), goalie: role === "goalie", compact,
-  });
+  const name = String(playerName || stats.Username || "").trim().toLowerCase();
+  const platform = String(stats.Platform || "").trim().toLowerCase();
+  const candidates = cvhlRatingResults(season).filter(p => p.name.toLowerCase() === name && p.role === (role === "goalie" ? "Goalie" : "Skater") && (!platform || p.key === name + "|" + platform));
+  const result = candidates.length === 1 ? candidates[0] : null;
+  if (!result) return '<span class="cl-player-rank" title="Cleared game data is unavailable or needs review">Rating unavailable</span>';
+  return window.ChelRanks.render({score: result.score, gp: result.gp, goalie: role === "goalie", compact});
 }
 
 const POSITION_CHART_COLORS = {
@@ -6426,7 +6445,7 @@ function updatePlayerModalMeta(role) {
   const team = activeStats["Team"] || card.clickedStats?.["Team"] || "";
   const pos = info.isGoalie ? "Goalie" : (activeStats["Position"] || card.clickedStats?.["Position"] || "");
   const plat = activeStats["Platform"] || card.clickedStats?.["Platform"] || "";
-  const overallBadge = renderOverallBadge(activeStats, info.isGoalie ? "goalie" : "player", card.playerName);
+  const overallBadge = renderOverallBadge(activeStats, info.isGoalie ? "goalie" : "player", card.playerName, false, info.season);
 
   meta.innerHTML = `
     <span><strong style="color:#fff">${team}</strong></span>
@@ -6469,6 +6488,7 @@ function setPlayerStatSplit(role, key) {
 
 async function openPlayerModal(playerName, rowData, headers, isGoalie, season = "regular") {
   if (isHiddenPlayerName(playerName)) return;
+  try { await ensureGameLogsLoaded(); } catch(e) { console.warn("Rating logs unavailable", e); }
   const clickedStats = statsFromRow(rowData, headers);
   await ensurePlayoffStatsLoaded();
   const clickedIsRegular = season !== "playoffs";
@@ -6656,7 +6676,7 @@ document.addEventListener("visibilitychange", () => {
 function makeClickable(name, rowData, headers, isGoalie, season = "regular", extraClass = "") {
   const classes = ["player-name", "clickable", extraClass].filter(Boolean).join(" ");
   const stats = statsFromRow(rowData, headers);
-  const badge = renderOverallBadge(stats, isGoalie ? "goalie" : "player", name, true);
+  const badge = renderOverallBadge(stats, isGoalie ? "goalie" : "player", name, true, season);
   const action = `openPlayerModal(${JSON.stringify(name)}, ${JSON.stringify(rowData)}, ${JSON.stringify(headers)}, ${isGoalie}, ${JSON.stringify(season)})`;
   return `<td class="${escapeHtml(classes)}" onclick="${escapeHtml(action)}"><span class="cl-player-name">${badge}<span class="cl-player-name-text">${escapeHtml(name)}</span></span></td>`;
 }
