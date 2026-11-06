@@ -6099,7 +6099,7 @@ function renderOverallBadge(stats, role, playerName = "", compact = false, seaso
   const platform = String(stats.Platform || "").trim().toLowerCase();
   const candidates = cvhlRatingResults(season).filter(p => p.name.toLowerCase() === name && p.role === (role === "goalie" ? "Goalie" : "Skater") && (!platform || p.key === name + "|" + platform));
   const result = candidates.length === 1 ? candidates[0] : null;
-  if (!result) return '<span class="cl-player-rank" title="Cleared game data is unavailable or needs review">Rating unavailable</span>';
+  if (!result) return window.ChelRanks.render({score: NaN, gp: 0, goalie: role === "goalie", compact});
   return window.ChelRanks.render({score: result.score, gp: result.gp, goalie: role === "goalie", compact});
 }
 
