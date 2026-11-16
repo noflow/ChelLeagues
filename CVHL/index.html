@@ -1798,7 +1798,20 @@ nav button:hover { background: #154275; }
   background: transparent;
   border-left-color: var(--accent);
 }
+/* Separate text colors for dark page surfaces and light cards. */
 .date-header { color: #edf5ff; border-bottom-color: #40c6ff; }
+.modal-card .date-header { color: #081426; border-bottom-color: #15618f; }
+.leader-rank { color: #15618f; }
+th.rank-head { color: #c4d6e9; }
+.pos-badge { color: #243c56; }
+.tc-player-name { color: #274cb5 !important; }
+.game-score.loser { color: #566980; }
+.badge.ot { background: #dfedfc; color: #174d78; }
+.badge.lgot { color: #b7192d; }
+.loading { background: #101b2d; color: #c4d6e9; border-radius: 8px; }
+.player-split-btn { color: #edf5ff; }
+.player-split-btn.active { color: #081426; }
+
 .controls { background: var(--ice); }
 .controls .filter-label, .controls .record-count { color: #b5c7dc; }
 .home-hero {
@@ -1834,7 +1847,7 @@ footer { color: #b5c7dc; }
 .leader-card-title { line-height: 1.35; }
 
 </style>
-<link rel="stylesheet" href="player-centre.css?v=line-squares-1">
+<link rel="stylesheet" href="player-centre.css?v=contrast-2">
 <script defer src="player-centre.js?v=approval-count-1" data-player-league="continental-virtual-hockey-league" data-player-service="https://api-toolbox.onrender.com"></script>
 <link rel="icon" type="image/png" href="../assets/chel-leagues-icon.png">
 <link rel="manifest" href="../manifest.webmanifest">
@@ -5558,7 +5571,7 @@ function openBoxScore(gameIdx, source) {
     bodyHtml += `
       <div class="box-team-section">
         <div class="box-team-label">${team} &nbsp; <span style="font-size:22px">${score}</span>
-          <span style="font-size:13px;font-weight:400;color:${result==="Win"?"#27ae60":"var(--accent)"};margin-left:10px">${result}</span>
+          <span style="font-size:13px;font-weight:400;color:${result==="Win"?"#187a42":"#b7192d"};margin-left:10px">${result}</span>
         </div>`;
 
     // Skater table
