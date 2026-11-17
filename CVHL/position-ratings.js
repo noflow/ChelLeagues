@@ -41,7 +41,7 @@ function evaluate(snapshot){
   const results=[...combined.values()].map(p=>({...p,position:p.splits.map(s=>`${s.pos} (${s.gp})`).join(' / '),composite:p.splits.reduce((sum,s)=>sum+s.composite*s.gp,0)/p.gp}));
   for(const g of goalies){const t=g.totals;g.metrics={save:t['Shots Against']?t.Saves/t['Shots Against']:null,gaa:t['Goals Against']/g.gp};}
   for(const g of goalies){g.categories={save:g.metrics.save===null?null:quality(g.metrics.save,goalies.map(p=>p.metrics.save),g.totals['Shots Against'],50),gaa:quality(g.metrics.gaa,goalies.map(p=>p.metrics.gaa),g.gp,4,true)};g.composite=average([[g.categories.save,70],[g.categories.gaa,20]]);g.peerCount=goalies.length;results.push({key:g.key,name:g.name,role:'Goalie',gp:g.gp,position:'G',composite:g.composite,splits:[{...g,teams:[...g.teams]}]});}
-  return results.map(p=>({...p,score:Math.round(70+26*p.composite/100),qualified:p.gp>=(p.role==='Goalie'?3:4)})).map(p=>({...p,tier:badge(p.score)}));
+  return results.map(p=>({...p,score:p.role==='Goalie'?Math.round(70+26*p.composite/100):Math.round(Math.max(70,Math.min(96,83+(p.composite-50)*.52))),qualified:p.gp>=(p.role==='Goalie'?3:4)})).map(p=>({...p,tier:badge(p.score)}));
 }
 const api={WEIGHTS,num,records,key,position,percentile,quality,average,badge,aggregate,evaluate};
 if(typeof module!=='undefined' && module.exports) module.exports=api;
